@@ -1,6 +1,6 @@
 // Token UI - Quick Register
 import { tokenManager } from './token-manager.js';
-import { renderTokenList } from './token-ui-list.js';
+import { renderTokenList, flashNewToken } from './token-ui-list.js';
 import { showToast } from './ui.js';
 
 export async function quickRegisterToken() {
@@ -14,16 +14,8 @@ export async function quickRegisterToken() {
             const newToken = await tokenManager.quickRegisterToken();
             renderTokenList();
             showToast(`Token "${newToken.name}" added successfully!`, 'success');
-            
-            // Add animation to new token
-            setTimeout(() => {
-                const newTokenEl = document.querySelector(`[data-token-id="${newToken.id}"]`);
-                if (newTokenEl) {
-                    newTokenEl.classList.add('new');
-                    setTimeout(() => newTokenEl.classList.remove('new'), 300);
-                }
-            }, 100);
-            
+            flashNewToken(newToken.id);
+
             // Restore button text
             btn.textContent = originalText;
             btn.disabled = false;

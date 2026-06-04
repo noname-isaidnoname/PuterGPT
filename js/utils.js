@@ -18,7 +18,7 @@ export function generateUniqueId() {
  */
 export function deepDiff(a, b, path = "") {
     const changes = {};
-    
+
     for (const key in { ...a, ...b }) {
         const fullPath = path ? `${path}.${key}` : key;
         if (Object.is(a[key], b[key])) continue;
@@ -29,6 +29,21 @@ export function deepDiff(a, b, path = "") {
             changes[fullPath] = { before: b[key], after: a[key] };
         }
     }
-    
+
     return changes;
+}
+
+/**
+ * Extract plain text from a message's content field. Handles both string content
+ * and the array form used when images are attached.
+ * @param {Object} message
+ * @returns {string}
+ */
+export function getMessageText(message) {
+    if (!message) return '';
+    if (Array.isArray(message.content)) {
+        const textItem = message.content.find(item => item.type === 'text');
+        return textItem ? textItem.text : '';
+    }
+    return message.content || '';
 }

@@ -1,11 +1,11 @@
 import { state, els } from './state.js';
 import { generateUniqueId } from './utils.js';
-import { showToast, showChatContextMenu, scrollToBottom } from './ui.js';
-import { saveChatToStorage } from './storage.js';
+import { showChatContextMenu } from './ui.js';
 import { tokenManager } from './token-manager.js';
-import { renderMessage, reRenderAllMessages } from './chat-ui.js';
-import { triggerAssistantResponse, abortAssistantResponse } from './chat-api.js';
+import { reRenderAllMessages } from './chat-ui.js';
+import { abortAssistantResponse } from './chat-api.js';
 import { setState } from './store.js';
+import { emit, on } from './event-bus.js';
 import './chat-edit.js'; // Registers global edit functions
 
 // Chat Logic & Rendering
@@ -39,14 +39,14 @@ export async function sendMessage() {
     const modelSupportsVision = currentModel && currentModel.supportsVision;
 
     if (hasImages && !modelSupportsVision) {
-        showToast(`Current model "${currentModel ? currentModel.name : 'Unknown'}" doesn't support vision. Please switch to a model with "(Vision)" in the name.`, 'error');
+        emit('toast:show', `Current model "${currentModel ? currentModel.name : 'Unknown'}" doesn't support vision. Please switch to a model with "(Vision)" in the name.`, 'error');
         return;
     }
 
     const currentToken = await tokenManager.getCurrentToken();
     if (!currentToken) {
         openSettings();
-        showToast("Please add at least one token in Settings!");
+        emit('toast:show', "Please add at least one token in Settings!");
         return;
     }
 
@@ -61,7 +61,7 @@ export async function sendMessage() {
     // Image preview will update automatically via subscription
 }
 
-export function newChat() {
+function newChat() {
     setState({
         currentChatId: null,
         messages: [],
@@ -120,9 +120,9 @@ async function processUserTurn(text) {
         messages: [...state.messages, newMessage]
     }));
 
-    renderMessage(state.messages.length, newMessage);
-    saveChatToStorage();
+    emit('message:append', state.messages.length - 1, newMessage);
+    emit('chat:save');
 
-    await triggerAssistantResponse();
+    await import('./chat-api.js').then(m => m.triggerAssistantResponse());
 }
 

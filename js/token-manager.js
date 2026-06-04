@@ -2,7 +2,16 @@ import { db } from './indexeddb-storage.js';
 import { generateUniqueId } from './utils.js';
 
 // Token Management System with Rotation
-export class TokenManager {
+class TokenManager {
+    // Find a token by its value, accepting both 'value' and 'token' field names
+    // (different versions of the schema used different keys).
+    async _findTokenByValue(tokenValue) {
+        return (
+            (await db.tokens.where('value').equals(tokenValue).first()) ||
+            (await db.tokens.where('token').equals(tokenValue).first()) ||
+            null
+        );
+    }
     constructor() {
         this.tokens = [];
         this.currentIndex = 0;
@@ -213,14 +222,13 @@ export class TokenManager {
     // Mark token as failed
     async markTokenFailed(tokenValue) {
         this.failedTokens.add(tokenValue);
-        const tokenObj = await db.tokens.where('value').equals(tokenValue).first() || 
-                         await db.tokens.where('token').equals(tokenValue).first();
+        const tokenObj = await this._findTokenByValue(tokenValue);
         if (tokenObj) {
             tokenObj.isHealthy = false;
             await db.tokens.put(tokenObj);
             await this.loadTokens();
         }
-        
+
         // If rotation is enabled, move to next token
         if (this.rotationEnabled) {
             this.currentIndex = (this.currentIndex + 1) % this.tokens.length;
@@ -230,8 +238,7 @@ export class TokenManager {
     // Mark token as successful
     async markTokenSuccess(tokenValue) {
         this.failedTokens.delete(tokenValue);
-        const tokenObj = await db.tokens.where('value').equals(tokenValue).first() || 
-                         await db.tokens.where('token').equals(tokenValue).first();
+        const tokenObj = await this._findTokenByValue(tokenValue);
         if (tokenObj) {
             tokenObj.isHealthy = true;
             tokenObj.lastUsed = new Date().toISOString();

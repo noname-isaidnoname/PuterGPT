@@ -1,0 +1,17 @@
+{
+  "$schema": "https://cdn.jsdelivr.net/npm/fallow/schema.json",
+  "entry": [
+    "js/app.js",
+    "index.html"
+  ],
+  "ignoreExports": [
+    {
+      "file": "js/chat-ui.js",
+      "exports": ["*"]
+    },
+    {
+      "file": "js/ui.js",
+      "exports": ["*"]
+    }
+  ]
+}

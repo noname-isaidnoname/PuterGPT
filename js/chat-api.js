@@ -1,17 +1,54 @@
 import { streamPuterCompletion } from 'https://noname-isaidnoname.github.io/MyAIUtilities/puterStream.js';
-import { state } from './state.js';
-import { scrollToBottom, showToast } from './ui.js';
-import { saveChatToStorage } from './storage.js';
+import { state, els } from './state.js';
 import { tokenManager } from './token-manager.js';
-import { renderMessage, reRenderAllMessages, decorateCodeBlocks } from './chat-ui.js';
 import { setState } from './store.js';
 import { estimateTokens, calculateMessageCost } from './models.js';
+import { emit, on } from './event-bus.js';
+import { decorateCodeBlocks } from './chat-ui.js';
 
 // Global operation lock to prevent concurrent API calls
 let isOperationInProgress = false;
 
+/**
+ * Persist any partial assistant response (or drop the empty assistant bubble
+ * when there is nothing to keep). Used by both the abort path and the error
+ * path.
+ */
+function finalizePartialResponse(aiMsgIndex, fullContent, fullReasoning) {
+    if (fullContent || fullReasoning) {
+        const finalContent = fullContent || (fullReasoning ? '[Response not generated]' : '');
+        state.messages[aiMsgIndex].content = finalContent;
+        state.messages[aiMsgIndex].reasoning = fullReasoning;
+        emit('messages:rerender');
+        emit('chat:save');
+    } else {
+        state.messages.splice(aiMsgIndex, 1);
+        emit('messages:rerender');
+    }
+}
+
+/**
+ * Remove the placeholder assistant message that the streaming callback added.
+ * Falls back to the most recent message if the expected index is no longer
+ * the empty placeholder.
+ */
+function removeEmptyAssistantPlaceholder(aiMsgIndex) {
+    if (
+        aiMsgIndex !== undefined &&
+        state.messages[aiMsgIndex] &&
+        state.messages[aiMsgIndex].role === 'assistant' &&
+        state.messages[aiMsgIndex].content === ''
+    ) {
+        state.messages.splice(aiMsgIndex, 1);
+        return;
+    }
+    const lastMsg = state.messages[state.messages.length - 1];
+    if (lastMsg && lastMsg.role === 'assistant' && lastMsg.content === '') {
+        state.messages.pop();
+    }
+}
+
 export async function triggerAssistantResponse() {
-    // Prevent concurrent operations
     if (isOperationInProgress) {
         console.warn('Assistant response already in progress, ignoring duplicate request');
         return;
@@ -19,249 +56,36 @@ export async function triggerAssistantResponse() {
 
     isOperationInProgress = true;
 
-    // Declare variables outside try block for catch block access
-    let aiMsgIndex, aiMsgId, aiMsgEl, contentEl;
-    let fullContent = "";
-    let reasoningBlock = null;
-    let contentWrapper = null;
-    let fullReasoning = "";
-    let toolUseBlock = null;
+    const ctx = createStreamContext();
 
     try {
-        const lastUserMessage = state.messages.filter(m => m.role === 'user').pop();
-        const hasImagesForApi = lastUserMessage && lastUserMessage.images && lastUserMessage.images.length > 0;
-
         const currentModel = state.models.find(m => m.id === state.config.modelId);
-        const modelSupportsVision = currentModel && currentModel.supportsVision;
-        const enableVision = hasImagesForApi && modelSupportsVision;
-        
-        const modelSupportsSearch = currentModel && currentModel.supportsSearch;
-        const enableWebSearch = modelSupportsSearch && state.config.enableWebSearch;
+        const { messagesPayload, inputTokens, enableVision, enableWebSearch } = buildRequestPayload(currentModel);
 
-        const messagesPayload = [
-            { role: 'system', content: state.config.systemPrompt },
-            ...state.messages
-        ];
-
-        // Calculate input tokens (rough estimate)
-        const inputText = messagesPayload.map(m => m.content).join(' ');
-        const inputTokens = estimateTokens(inputText);
-
-        setState((state) => ({
-            messages: [...state.messages, { role: 'assistant', content: '' }]
-        }));
-
-        // Get the correct index after state update
-        aiMsgIndex = state.messages.length - 1;
-        aiMsgId = renderMessage(aiMsgIndex, { role: 'assistant', content: '' }, true);
-        aiMsgEl = document.getElementById(aiMsgId);
-        contentEl = aiMsgEl.querySelector('.message-content');
+        await prepareAssistantBubble(ctx);
+        const operationId = Date.now();
+        const abortController = new AbortController();
+        setState({
+            lastOperationId: operationId,
+            abortController
+        });
 
         const currentToken = await tokenManager.getCurrentToken();
         const apiToken = await tokenManager.getApiToken();
-        const headers = {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiToken || ''}`,
-          'Accept': '*/*'
-        };
-
-        const operationId = Date.now();
-        const abortController = new AbortController();
-        setState({ 
-            lastOperationId: operationId,
-            abortController: abortController 
-        });
 
         await streamPuterCompletion({
             apiUrl: "https://api.puter.com/drivers/call",
-            requestBody: {
-                "interface": "puter-chat-completion",   
-                "driver": "ai-chat",
-                "test_mode": true,
-                "method": "complete",
-                "args": {
-                    vision: enableVision,
-                    messages: messagesPayload,
-                    model: state.config.modelId,
-                    stream: true,
-                    ...(enableWebSearch && { tools: [{ type: 'web_search' }] })
-                }
-            },
-            headers,
+            requestBody: buildStreamRequestBody({ messagesPayload, enableVision, enableWebSearch }),
+            headers: buildRequestHeaders(apiToken),
             signal: abortController.signal,
-            onToolUse: (toolUse) => {
-                if (state.lastOperationId !== operationId) return;
-                // Display tool use information in the UI
-                if (!toolUseBlock) {
-                    toolUseBlock = document.createElement('div');
-                    toolUseBlock.className = 'tool-use-block';
-                    toolUseBlock.innerHTML = `<div class="tool-use-header"><span class="material-icons-outlined" style="font-size:16px">search</span> <span>Using Web Search</span></div><div class="tool-use-content"></div>`;
-                    contentEl.prepend(toolUseBlock);
-                }
-                const toolContent = toolUseBlock.querySelector('.tool-use-content');
-                if (toolUse.name === 'web_search' && toolUse.input) {
-                    toolContent.textContent = `Searching for: ${JSON.stringify(toolUse.input)}`;
-                } else {
-                    toolContent.textContent = `Tool: ${toolUse.name} - ${JSON.stringify(toolUse.input)}`;
-                }
-            },
-            onPartialUpdate: (update) => {
-                 if (state.lastOperationId !== operationId) return;
-                 const typing = contentEl.querySelector('.typing-indicator');
-                 if (typing) typing.remove();
-
-                 const reasoningText = update.accumulatedReasoning || "";
-                 if (reasoningText.trim().length > 0) {
-                     fullReasoning = reasoningText;
-                     if (!reasoningBlock) {
-                         reasoningBlock = document.createElement('div');
-                         reasoningBlock.className = 'reasoning-block';
-                         reasoningBlock.innerHTML = `<div class="reasoning-header"><span>Thinking Process</span> <span class="material-icons-outlined" style="font-size:16px">expand_less</span></div><div class="reasoning-content open"></div>`;
-                         const rContent = reasoningBlock.querySelector('.reasoning-content');
-                         const rHeader = reasoningBlock.querySelector('.reasoning-header');
-                         rHeader.onclick = () => {
-                             rContent.classList.toggle('open');
-                             rHeader.querySelector('.material-icons-outlined').textContent = rContent.classList.contains('open') ? 'expand_less' : 'expand_more';
-                         };
-                         contentEl.prepend(reasoningBlock);
-                     }
-                     reasoningBlock.querySelector('.reasoning-content').textContent = reasoningText;
-                 }
-
-                 if (update.accumulatedContent !== undefined) {
-                     fullContent = update.accumulatedContent;
-                     if (!contentWrapper) {
-                         contentWrapper = document.createElement('div');
-                         contentWrapper.className = 'assistant-response';
-                         contentEl.appendChild(contentWrapper);
-                     }
-                     contentWrapper.innerHTML = marked.parse(fullContent);
-                     contentWrapper.querySelectorAll('pre code').forEach((block) => hljs.highlightElement(block));
-                     decorateCodeBlocks(contentWrapper);
-                 }
-                 scrollToBottom();
-            },
-            onComplete: (final) => {
-                 if (state.lastOperationId !== operationId) return;
-                 const typing = contentEl.querySelector('.typing-indicator');
-                 if (typing) typing.remove();
-                 
-                 const finalContent = final.accumulatedContent || fullContent;
-                 const finalReasoning = final.accumulatedReasoning || fullReasoning;
-                 
-                 state.messages[aiMsgIndex].content = finalContent;
-                 state.messages[aiMsgIndex].reasoning = finalReasoning;
-                 
-                 // Calculate output tokens and cost
-                 const outputTokens = estimateTokens(finalContent);
-                 const costInfo = calculateMessageCost(inputTokens, outputTokens, currentModel?.costInfo);
-                 
-                 // Add cost information to the message
-                 state.messages[aiMsgIndex].cost = costInfo;
-                 
-                 reRenderAllMessages();
-                 saveChatToStorage();
-                 
-                 // Clear operation state
-                 setState({ 
-                     lastOperationId: null,
-                     abortController: null 
-                 });
-                 
-                 if (currentToken && (currentToken.value || currentToken.token)) {
-                     tokenManager.markTokenSuccess(currentToken.value || currentToken.token);
-                 }
-            },
-            onError: (err) => {
-                 if (state.lastOperationId !== operationId) return;
-                 const typing = contentEl.querySelector('.typing-indicator');
-                 if (typing) typing.remove();
-                 
-                 // Don't show error for intentional aborts
-                 if (err.name === 'AbortError') {
-                     // Save partial content before cleaning up
-                     if (fullContent || fullReasoning) {
-                         // If there's reasoning but no content, add placeholder
-                         const finalContent = fullContent || (fullReasoning ? '[Response not generated]' : '');
-                         state.messages[aiMsgIndex].content = finalContent;
-                         state.messages[aiMsgIndex].reasoning = fullReasoning;
-                         reRenderAllMessages();
-                         saveChatToStorage();
-                     } else {
-                         // Only remove empty assistant message if there's no reasoning content
-                         state.messages.splice(aiMsgIndex, 1);
-                         reRenderAllMessages();
-                     }
-                 } else {
-                     contentEl.innerHTML += `<p style="color:var(--danger)">Error: ${err.message}</p>`;
-                     
-                     // Safely remove the empty assistant message at the expected index
-                     if (state.messages[aiMsgIndex] && state.messages[aiMsgIndex].role === 'assistant' && state.messages[aiMsgIndex].content === '') {
-                         state.messages.splice(aiMsgIndex, 1);
-                     } else {
-                         // Fallback: remove the last message if it's an empty assistant message
-                         const lastMsg = state.messages[state.messages.length - 1];
-                         if (lastMsg && lastMsg.role === 'assistant' && lastMsg.content === '') {
-                             state.messages.pop();
-                         }
-                     }
-                     
-                     if (currentToken && (currentToken.value || currentToken.token)) {
-                         tokenManager.markTokenFailed(currentToken.value || currentToken.token);
-                         showToast(`Token "${currentToken.name}" failed. ${tokenManager.rotationEnabled ? 'Rotating to next token.' : 'Please check token or enable rotation.'}`, 'error');
-                     }
-                 }
-                 
-                 // Clear operation state
-                 setState({ 
-                     lastOperationId: null,
-                     abortController: null 
-                 });
-            }
+            onToolUse: (toolUse) => handleToolUse(ctx, toolUse, operationId),
+            onPartialUpdate: (update) => handlePartialUpdate(ctx, update, operationId),
+            onComplete: (final) => handleComplete(ctx, final, { inputTokens, currentModel, operationId }),
+            onError: (err) => handleStreamError(ctx, err, { currentToken, operationId })
         });
     } catch (err) {
-        // Don't show error for intentional aborts
-        if (err.name === 'AbortError') {
-            // Save partial content before cleaning up
-            if (contentEl && (fullContent || fullReasoning)) {
-                // If there's reasoning but no content, add placeholder
-                const finalContent = fullContent || (fullReasoning ? '[Response not generated]' : '');
-                state.messages[aiMsgIndex].content = finalContent;
-                state.messages[aiMsgIndex].reasoning = fullReasoning;
-                reRenderAllMessages();
-                saveChatToStorage();
-            } else {
-                // Only remove empty assistant message if there's no reasoning content
-                state.messages.splice(aiMsgIndex, 1);
-                reRenderAllMessages();
-            }
-            
-            // Clear operation state for abort
-            setState({ 
-                lastOperationId: null,
-                abortController: null 
-            });
-        } else {
-            // Only try to update DOM if elements were created
-            if (contentEl) {
-                const typing = contentEl.querySelector('.typing-indicator');
-                if (typing) typing.remove();
-                contentEl.innerHTML = `<p style="color:var(--danger)">Stream Failed: ${err.message}</p>`;
-            }
-            
-            // Safely remove the empty assistant message at the expected index
-            if (aiMsgIndex !== undefined && state.messages[aiMsgIndex] && state.messages[aiMsgIndex].role === 'assistant' && state.messages[aiMsgIndex].content === '') {
-                state.messages.splice(aiMsgIndex, 1);
-            } else {
-                // Fallback: remove the last message if it's an empty assistant message
-                const lastMsg = state.messages[state.messages.length - 1];
-                if (lastMsg && lastMsg.role === 'assistant' && lastMsg.content === '') {
-                    state.messages.pop();
-                }
-            }
-        }
+        handleOuterStreamError(err, ctx);
     } finally {
-        // Always clear the operation lock and abort controller
         isOperationInProgress = false;
         if (state.abortController) {
             setState({ abortController: null });
@@ -269,18 +93,210 @@ export async function triggerAssistantResponse() {
     }
 }
 
+function createStreamContext() {
+    return {
+        aiMsgIndex: undefined,
+        contentEl: null,
+        fullContent: '',
+        fullReasoning: '',
+        reasoningBlock: null,
+        contentWrapper: null,
+        toolUseBlock: null
+    };
+}
+
+function buildRequestPayload(currentModel) {
+    const lastUserMessage = state.messages.filter(m => m.role === 'user').pop();
+    const hasImagesForApi = lastUserMessage && lastUserMessage.images && lastUserMessage.images.length > 0;
+    const modelSupportsVision = currentModel && currentModel.supportsVision;
+    const modelSupportsSearch = currentModel && currentModel.supportsSearch;
+    const enableVision = hasImagesForApi && modelSupportsVision;
+    const enableWebSearch = modelSupportsSearch && state.config.enableWebSearch;
+
+    const messagesPayload = [
+        { role: 'system', content: state.config.systemPrompt },
+        ...state.messages
+    ];
+    const inputText = messagesPayload.map(m => m.content).join(' ');
+    const inputTokens = estimateTokens(inputText);
+
+    return { messagesPayload, inputTokens, enableVision, enableWebSearch };
+}
+
+function buildStreamRequestBody({ messagesPayload, enableVision, enableWebSearch }) {
+    return {
+        interface: 'puter-chat-completion',
+        driver: 'ai-chat',
+        test_mode: true,
+        method: 'complete',
+        args: {
+            vision: enableVision,
+            messages: messagesPayload,
+            model: state.config.modelId,
+            stream: true,
+            ...(enableWebSearch && { tools: [{ type: 'web_search' }] })
+        }
+    };
+}
+
+function buildRequestHeaders(apiToken) {
+    return {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiToken || ''}`,
+        'Accept': '*/*'
+    };
+}
+
+async function prepareAssistantBubble(ctx) {
+    setState((s) => ({
+        messages: [...s.messages, { role: 'assistant', content: '' }]
+    }));
+    ctx.aiMsgIndex = state.messages.length - 1;
+    emit('message:append', ctx.aiMsgIndex, { role: 'assistant', content: '' }, true);
+
+    // Wait for the DOM update to flush so we can query the element
+    await new Promise(r => requestAnimationFrame(r));
+    const aiMsgEls = els.chatContainer.querySelectorAll('.message');
+    const lastMsg = aiMsgEls[aiMsgEls.length - 1];
+    const aiMsgId = lastMsg ? lastMsg.id : null;
+    const aiMsgEl = aiMsgId ? document.getElementById(aiMsgId) : null;
+    ctx.contentEl = aiMsgEl ? aiMsgEl.querySelector('.message-content') : null;
+}
+
+function handleToolUse(ctx, toolUse, operationId) {
+    if (state.lastOperationId !== operationId) return;
+    if (!ctx.toolUseBlock) {
+        ctx.toolUseBlock = document.createElement('div');
+        ctx.toolUseBlock.className = 'tool-use-block';
+        ctx.toolUseBlock.innerHTML = `<div class="tool-use-header"><span class="material-icons-outlined" style="font-size:16px">search</span> <span>Using Web Search</span></div><div class="tool-use-content"></div>`;
+        ctx.contentEl.prepend(ctx.toolUseBlock);
+    }
+    const toolContent = ctx.toolUseBlock.querySelector('.tool-use-content');
+    if (toolUse.name === 'web_search' && toolUse.input) {
+        toolContent.textContent = `Searching for: ${JSON.stringify(toolUse.input)}`;
+    } else {
+        toolContent.textContent = `Tool: ${toolUse.name} - ${JSON.stringify(toolUse.input)}`;
+    }
+}
+
+function handlePartialUpdate(ctx, update, operationId) {
+    if (state.lastOperationId !== operationId) return;
+    const typing = ctx.contentEl && ctx.contentEl.querySelector('.typing-indicator');
+    if (typing) typing.remove();
+
+    if (update.accumulatedReasoning) {
+        updateReasoningBlock(ctx, update.accumulatedReasoning);
+    }
+
+    if (update.accumulatedContent !== undefined) {
+        updateContentBlock(ctx, update.accumulatedContent);
+    }
+
+    emit('ui:scroll-bottom');
+}
+
+function updateReasoningBlock(ctx, reasoningText) {
+    ctx.fullReasoning = reasoningText;
+    if (!ctx.reasoningBlock) {
+        ctx.reasoningBlock = document.createElement('div');
+        ctx.reasoningBlock.className = 'reasoning-block';
+        ctx.reasoningBlock.innerHTML = `<div class="reasoning-header"><span>Thinking Process</span> <span class="material-icons-outlined" style="font-size:16px">expand_less</span></div><div class="reasoning-content open"></div>`;
+        const rContent = ctx.reasoningBlock.querySelector('.reasoning-content');
+        const rHeader = ctx.reasoningBlock.querySelector('.reasoning-header');
+        rHeader.onclick = () => {
+            rContent.classList.toggle('open');
+            rHeader.querySelector('.material-icons-outlined').textContent = rContent.classList.contains('open') ? 'expand_less' : 'expand_more';
+        };
+        ctx.contentEl.prepend(ctx.reasoningBlock);
+    }
+    ctx.reasoningBlock.querySelector('.reasoning-content').textContent = reasoningText;
+}
+
+function updateContentBlock(ctx, content) {
+    ctx.fullContent = content;
+    if (!ctx.contentWrapper) {
+        ctx.contentWrapper = document.createElement('div');
+        ctx.contentWrapper.className = 'assistant-response';
+        ctx.contentEl.appendChild(ctx.contentWrapper);
+    }
+    ctx.contentWrapper.innerHTML = marked.parse(content);
+    ctx.contentWrapper.querySelectorAll('pre code').forEach((block) => hljs.highlightElement(block));
+    decorateCodeBlocks(ctx.contentWrapper);
+}
+
+function handleComplete(ctx, final, { inputTokens, currentModel, operationId }) {
+    if (state.lastOperationId !== operationId) return;
+    const typing = ctx.contentEl && ctx.contentEl.querySelector('.typing-indicator');
+    if (typing) typing.remove();
+
+    const finalContent = final.accumulatedContent || ctx.fullContent;
+    const finalReasoning = final.accumulatedReasoning || ctx.fullReasoning;
+    state.messages[ctx.aiMsgIndex].content = finalContent;
+    state.messages[ctx.aiMsgIndex].reasoning = finalReasoning;
+
+    const outputTokens = estimateTokens(finalContent);
+    state.messages[ctx.aiMsgIndex].cost = calculateMessageCost(inputTokens, outputTokens, currentModel?.costInfo);
+
+    emit('messages:rerender');
+    emit('chat:save');
+
+    setState({ lastOperationId: null, abortController: null });
+
+    if (currentToken && (currentToken.value || currentToken.token)) {
+        tokenManager.markTokenSuccess(currentToken.value || currentToken.token);
+    }
+}
+
+function handleStreamError(ctx, err, { currentToken, operationId }) {
+    if (state.lastOperationId !== operationId) return;
+    const typing = ctx.contentEl && ctx.contentEl.querySelector('.typing-indicator');
+    if (typing) typing.remove();
+
+    if (err.name === 'AbortError') {
+        finalizePartialResponse(ctx.aiMsgIndex, ctx.fullContent, ctx.fullReasoning);
+    } else {
+        if (ctx.contentEl) {
+            ctx.contentEl.innerHTML += `<p style="color:var(--danger)">Error: ${err.message}</p>`;
+        }
+        removeEmptyAssistantPlaceholder(ctx.aiMsgIndex);
+        if (currentToken && (currentToken.value || currentToken.token)) {
+            tokenManager.markTokenFailed(currentToken.value || currentToken.token);
+            emit('toast:show', `Token "${currentToken.name}" failed. ${tokenManager.rotationEnabled ? 'Rotating to next token.' : 'Please check token or enable rotation.'}`, 'error');
+        }
+    }
+    setState({ lastOperationId: null, abortController: null });
+}
+
+function handleOuterStreamError(err, ctx) {
+    if (err.name === 'AbortError') {
+        if (ctx.contentEl) {
+            finalizePartialResponse(ctx.aiMsgIndex, ctx.fullContent, ctx.fullReasoning);
+        } else {
+            removeEmptyAssistantPlaceholder(ctx.aiMsgIndex);
+        }
+        setState({ lastOperationId: null, abortController: null });
+    } else {
+        if (ctx.contentEl) {
+            const typing = ctx.contentEl.querySelector('.typing-indicator');
+            if (typing) typing.remove();
+            ctx.contentEl.innerHTML = `<p style="color:var(--danger)">Stream Failed: ${err.message}</p>`;
+        }
+        removeEmptyAssistantPlaceholder(ctx.aiMsgIndex);
+    }
+}
+
 export function abortAssistantResponse() {
     if (state.lastOperationId && state.abortController) {
         // Abort the current stream
         state.abortController.abort();
-        
+
         // Clear operation state immediately
-        setState({ 
+        setState({
             lastOperationId: null,
-            abortController: null 
+            abortController: null
         });
-        
+
         // Show feedback to user
-        showToast('Response generation stopped', 'info');
+        emit('toast:show', 'Response generation stopped', 'info');
     }
 }

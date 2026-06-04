@@ -1,9 +1,7 @@
 import { state } from './state.js';
-import { saveChatToStorage } from './storage.js';
-import { showToast } from './ui.js';
-import { getMessageText, reRenderAllMessages } from './chat-ui.js';
-import { triggerAssistantResponse } from './chat-api.js';
+import { getMessageText } from './utils.js';
 import { setState } from './store.js';
+import { emit } from './event-bus.js';
 
 window.enterEditMode = function(index) {
     const message = state.messages[index];
@@ -47,41 +45,35 @@ window.enterEditMode = function(index) {
 };
 
 window.cancelEdit = function(index) {
-    reRenderAllMessages();
+    emit('messages:rerender');
 };
 
-window.saveEdit = function(index) {
+function readEditTextarea(index) {
     const textarea = document.getElementById(`edit-textarea-${index}`);
-    if (!textarea) return;
-    const newContent = textarea.value;
-    
+    return textarea ? textarea.value : null;
+}
+
+function commitMessageEdit(index, newContent, { truncate = false } = {}) {
     setState((state) => {
         const newMessages = [...state.messages];
         newMessages[index] = { ...newMessages[index], content: newContent };
-        return { messages: newMessages };
+        return { messages: truncate ? newMessages.slice(0, index + 1) : newMessages };
     });
-    
-    reRenderAllMessages();
-    saveChatToStorage();
-    showToast("Message updated");
+    emit('messages:rerender');
+    emit('chat:save');
+}
+
+window.saveEdit = function(index) {
+    const newContent = readEditTextarea(index);
+    if (newContent === null) return;
+    commitMessageEdit(index, newContent);
+    emit('toast:show', "Message updated");
 };
 
 window.saveAndRegenerate = async function(index) {
-    const textarea = document.getElementById(`edit-textarea-${index}`);
-    if (!textarea) return;
-    const newContent = textarea.value;
-    
-    setState((state) => {
-        const newMessages = [...state.messages];
-        newMessages[index] = { ...newMessages[index], content: newContent };
-        
-        // Truncate messages after this one
-        const truncatedMessages = newMessages.slice(0, index + 1);
-        return { messages: truncatedMessages };
-    });
+    const newContent = readEditTextarea(index);
+    if (newContent === null) return;
+    commitMessageEdit(index, newContent, { truncate: true });
 
-    reRenderAllMessages();
-    saveChatToStorage();
-    
-    await triggerAssistantResponse();
+    await import('./chat-api.js').then(m => m.triggerAssistantResponse());
 };

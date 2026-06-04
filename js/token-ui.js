@@ -21,21 +21,7 @@ import {
 
 import { quickRegisterToken } from './token-ui-quick.js';
 
-// Export for module consumers
-export {
-    renderTokenList,
-    addToken,
-    deleteToken,
-    setActiveToken,
-    editTokenName,
-    toggleTokenDisabled,
-    toggleTokenRotation,
-    initializeTokenManagement,
-    showTokenGuide,
-    importTokens,
-    exportTokens,
-    quickRegisterToken
-};
+export { initializeTokenManagement };
 
 // Attach to window for HTML inline onclick handlers
 window.addToken = addToken;

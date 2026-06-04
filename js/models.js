@@ -1,7 +1,23 @@
 import { state, els } from './state.js';
-import { showToast } from './ui.js';
 import { db } from './indexeddb-storage.js';
 import { setState } from './store.js';
+import { emit } from './event-bus.js';
+
+/**
+ * Populate a <select> with <option> entries for the given model list.
+ * @param {HTMLSelectElement} selectEl
+ * @param {Array<{id: string, name?: string}>} models
+ */
+export function populateSelectWithModels(selectEl, models) {
+    if (!selectEl) return;
+    selectEl.innerHTML = '';
+    models.forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m.id;
+        opt.textContent = m.name || m.id;
+        selectEl.appendChild(opt);
+    });
+}
 
 // Model Management
 export async function loadModels() {
@@ -60,15 +76,11 @@ export async function loadModels() {
 
 export function populateModelSelect(models) {
     const currentModel = state.config.modelId;
-    els.modelSelect.innerHTML = '';
     let found = false;
     models.forEach(m => {
-        const opt = document.createElement('option');
-        opt.value = m.id;
-        opt.textContent = m.name || m.id;
-        if(m.id === currentModel) found = true;
-        els.modelSelect.appendChild(opt);
+        if (m.id === currentModel) found = true;
     });
+    populateSelectWithModels(els.modelSelect, models);
     if(!found && currentModel) {
          const opt = document.createElement('option');
          opt.value = currentModel;
@@ -321,7 +333,7 @@ export function calculateMessageCost(inputTokens, outputTokens, costInfo) {
     };
 }
 
-export function formatCostDisplay(costInfo) {
+function formatCostDisplay(costInfo) {
     if (!costInfo) {
         return 'Cost information not available, Try refreshing models!';
     }
@@ -353,5 +365,5 @@ window.refreshModels = async () => {
     setState({ models: [] });
     await db.settings.delete('cached_models');
     await loadModels();
-    showToast("Models refreshed");
+    emit('toast:show', "Models refreshed");
 };

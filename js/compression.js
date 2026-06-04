@@ -4,7 +4,7 @@
 // Import LZ-string (will be loaded via CDN in HTML)
 const LZString = window.LZString;
 
-export function compressChatData(chatData) {
+function compressChatData(chatData) {
     try {
         // Convert chat data to JSON string
         const jsonString = JSON.stringify(chatData);
@@ -19,7 +19,7 @@ export function compressChatData(chatData) {
     }
 }
 
-export function decompressChatData(compressedData) {
+function decompressChatData(compressedData) {
     try {
         // Decompress using LZ-string
         const decompressed = LZString.decompressFromEncodedURIComponent(compressedData);

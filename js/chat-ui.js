@@ -1,18 +1,9 @@
 import { state, els } from './state.js';
-import { generateUniqueId } from './utils.js';
-import { scrollToBottom as uiScrollToBottom } from './ui.js';
+import { generateUniqueId, getMessageText } from './utils.js';
+import { emit, on } from './event-bus.js';
 
-export const scrollToBottom = uiScrollToBottom;
-
-// Helper function to extract text from message content (handles both string and array)
-export function getMessageText(message) {
-    if (Array.isArray(message.content)) {
-        const textItem = message.content.find(item => item.type === 'text');
-        return textItem ? textItem.text : '';
-    } else {
-        return message.content || '';
-    }
-}
+// getMessageText is re-exported from utils for backward compatibility
+export { getMessageText };
 
 // Copy Button Logic
 export function decorateCodeBlocks(root) {
@@ -134,6 +125,7 @@ export function renderMessage(index, message, isTyping = false) {
     `;
 
     els.chatContainer.appendChild(msgDiv);
+    emit('ui:scroll-bottom');
     
     if (!isTyping && message.reasoning) {
         const rHeader = msgDiv.querySelector('.reasoning-header');
@@ -150,8 +142,8 @@ export function renderMessage(index, message, isTyping = false) {
         renderedDiv.querySelectorAll('pre code').forEach((block) => hljs.highlightElement(block));
         decorateCodeBlocks(renderedDiv);
     }
-    
-    scrollToBottom();
+
+    emit('ui:scroll-bottom');
     return id;
 }
 
@@ -161,5 +153,15 @@ export function reRenderAllMessages() {
         if (msg.content === '' && msg.role === 'assistant') return;
         renderMessage(index, msg);
     });
-    scrollToBottom();
+    emit('ui:scroll-bottom');
 }
+
+// Listen for message-append events from decoupled modules (chat.js, chat-api.js)
+on('message:append', (index, message, isTyping = false) => {
+    renderMessage(index, message, isTyping);
+});
+
+// Listen for rerender requests
+on('messages:rerender', () => {
+    reRenderAllMessages();
+});

@@ -164,7 +164,7 @@ export const themeDefinitions = {
   };
 
 // Create the main application store
-export const useAppStore = createStore((set, get) => ({
+const useAppStore = createStore((set, get) => ({
   // Chat state
   messages: [],
   currentChatId: null,
@@ -235,7 +235,7 @@ export const useAppStore = createStore((set, get) => ({
 }));
 
 // Export store instance for direct access
-export const appStore = useAppStore;
+const appStore = useAppStore;
 
 // Export convenience functions
 export const getState = () => appStore.getState();

@@ -3,6 +3,20 @@ import { tokenManager } from './token-manager.js';
 import { els } from './state.js';
 import { showToast } from './ui.js';
 
+/**
+ * Briefly highlight a newly-added token in the list.
+ * @param {string} id - The token id (data-token-id attribute)
+ */
+export function flashNewToken(id) {
+    setTimeout(() => {
+        const el = document.querySelector(`[data-token-id="${id}"]`);
+        if (el) {
+            el.classList.add('new');
+            setTimeout(() => el.classList.remove('new'), 300);
+        }
+    }, 100);
+}
+
 export async function renderTokenList() {
     if (!els.tokenList) return;
     
@@ -95,16 +109,7 @@ export async function addToken() {
         if (els.tokenValue) els.tokenValue.value = '';
         
         showToast(`Token "${name}" added successfully`, 'success');
-        
-        // Add animation to new token
-        setTimeout(() => {
-            const newTokenEl = document.querySelector(`[data-token-id="${newToken.id}"]`);
-            if (newTokenEl) {
-                newTokenEl.classList.add('new');
-                setTimeout(() => newTokenEl.classList.remove('new'), 300);
-            }
-        }, 100);
-        
+        flashNewToken(newToken.id);
     } catch (error) {
         showToast(error.message, 'error');
     }

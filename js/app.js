@@ -6,135 +6,114 @@ import { initializeTokenManagement } from './token-ui.js';
 import { migrateFromLocalStorage, db } from './indexeddb-storage.js';
 import { setState, subscribe, themeDefinitions } from './store.js';
 import { deepDiff } from './utils.js';
+import { populateThemeDropdown } from './theme-ui.js';
 import './search-ui.js'; // Initializes search UI globally
 import './theme-generator.js'; // Initialize theme generator
 import { loadCustomThemes, handleThemeSelectChange } from './theme-generator.js';
-
-// Populate theme dropdown dynamically
-export function populateThemeDropdown() {
-    if (!els.themeSelect) return;
-    
-    // Clear existing options
-    els.themeSelect.innerHTML = '';
-    
-    // Debug: log theme definitions
-    console.log('Populating dropdown with themes:', Object.keys(themeDefinitions));
-    
-    // Add theme options from themeDefinitions
-    Object.entries(themeDefinitions).forEach(([key, theme]) => {
-        const option = document.createElement('option');
-        option.value = key;
-        option.textContent = theme.name;
-        els.themeSelect.appendChild(option);
-    });
-    
-    // Add custom theme generator option
-    const customOption = document.createElement('option');
-    customOption.value = 'generate-custom';
-    customOption.textContent = '🎨 Generate custom theme...';
-    els.themeSelect.appendChild(customOption);
-}
+import { emit } from './event-bus.js';
 
 // Main Application Initialization
 window.addEventListener('load', async () => {
+    await bootstrap();
+});
+
+async function bootstrap() {
     // Perform migration if needed
     await migrateFromLocalStorage();
+    await bootstrapThemes();
+    await import('./state.js').then(m => m.loadSettingsFromDB());
+    await initializeTokenManagement();
+    populateThemeDropdown();
 
-    // Load custom themes FIRST so they're in themeDefinitions before settings are applied
+    wireReactiveSubscriptions();
+    restoreConfigUI();
+
+    // Load Chats and Models
+    await loadSavedChats();
+    await loadModels();
+
+    initializeImageHandling();
+    initializeImportHandling();
+    initializeEventListeners();
+
+    // Check for shared chat URL
+    import('./export.js').then(m => m.loadSharedChat());
+}
+
+async function bootstrapThemes() {
+    // Custom themes must load BEFORE settings are applied, so the theme picker
+    // and theme CSS variables are correct on first paint.
     console.log('Loading custom themes...');
     await loadCustomThemes();
     console.log('Custom themes loaded, themeDefinitions now:', Object.keys(themeDefinitions));
+}
 
-    await import('./state.js').then(m => m.loadSettingsFromDB());
+function wireReactiveSubscriptions() {
+    subscribe(syncConfigToUI);
+}
 
-    // Initialize Token Management
-    await initializeTokenManagement();
-    
-    // Populate theme dropdown
-    populateThemeDropdown();
-    
-    // Set up reactive state subscriptions
-    subscribe((newState, prevState) => {
-        // Auto-scroll when messages change and auto-scroll is enabled
-        if (newState.messages !== prevState.messages && newState.config.autoScroll) {
-            setTimeout(() => {
-                els.chatContainer.scrollTop = els.chatContainer.scrollHeight;
-            }, 100);
-        }
-        
-        // Update model select when config changes
-        if (newState.config?.modelId !== prevState.config?.modelId) {
-            els.modelSelect.value = newState.config.modelId;
-        }
-        
-        // Update system prompt when config changes
-        if (newState.config?.systemPrompt !== prevState.config?.systemPrompt) {
-            els.systemPrompt.value = newState.config.systemPrompt;
-        }
-        
-        // Update auto-scroll checkbox when config changes
-        if (newState.config?.autoScroll !== prevState.config?.autoScroll) {
-            els.autoScroll.checked = newState.config.autoScroll;
-        }
-        
-        // Update enable web search checkbox when config changes
-        if (newState.config?.enableWebSearch !== prevState.config?.enableWebSearch) {
-            if (els.enableWebSearch) els.enableWebSearch.checked = newState.config.enableWebSearch;
-        }
+function syncConfigToUI(newState, prevState) {
+    if (newState.messages !== prevState.messages && newState.config.autoScroll) {
+        setTimeout(() => {
+            els.chatContainer.scrollTop = els.chatContainer.scrollHeight;
+        }, 100);
+    }
 
-        // Update theme select when config changes
-        if (newState.config?.theme !== prevState.config?.theme) {
-            if (els.themeSelect) els.themeSelect.value = newState.config.theme;
-            // Apply theme to document
-            import('./state.js').then(m => m.applyTheme(newState.config.theme));
-        }
-        
-        // Show/hide delete theme button based on theme type
-        const deleteBtn = document.getElementById('delete-theme-btn');
-        if (deleteBtn) {
-            const isCustomTheme = newState.config?.theme?.startsWith('custom-');
-            deleteBtn.style.display = isCustomTheme ? 'block' : 'none';
-        }
+    syncField(newState, prevState, 'modelId',       v => els.modelSelect.value = v);
+    syncField(newState, prevState, 'systemPrompt',  v => els.systemPrompt.value = v);
+    syncField(newState, prevState, 'autoScroll',    v => { els.autoScroll.checked = v; });
 
-        // Update send button icon based on operation state
-        const isGenerating = newState.lastOperationId && 
-                           newState.messages.some(m => m.role === 'assistant' && m.content === '');
-        const sendBtnIcon = els.sendBtn.querySelector('.material-icons-outlined');
-        if (sendBtnIcon) {
-            sendBtnIcon.textContent = isGenerating ? 'stop' : 'send';
-        }
+    if (newState.config?.enableWebSearch !== prevState.config?.enableWebSearch) {
+        if (els.enableWebSearch) els.enableWebSearch.checked = newState.config.enableWebSearch;
+    }
 
-        // Log state changes for debugging
-        const changes = deepDiff(newState, prevState);
-        if (Object.keys(changes).length > 0) {
-            console.log('State changes:', changes);
-        }
-    });
-    
-    // Restore Config from IndexedDB (already loaded above)
+    if (newState.config?.theme !== prevState.config?.theme) {
+        if (els.themeSelect) els.themeSelect.value = newState.config.theme;
+        import('./state.js').then(m => m.applyTheme(newState.config.theme));
+    }
+
+    const deleteBtn = document.getElementById('delete-theme-btn');
+    if (deleteBtn) {
+        const isCustomTheme = newState.config?.theme?.startsWith('custom-');
+        deleteBtn.style.display = isCustomTheme ? 'block' : 'none';
+    }
+
+    updateSendButtonIcon(newState);
+
+    const changes = deepDiff(newState, prevState);
+    if (Object.keys(changes).length > 0) {
+        console.log('State changes:', changes);
+    }
+}
+
+function syncField(newState, prevState, key, apply) {
+    if (newState.config?.[key] !== prevState.config?.[key]) {
+        apply(newState.config[key]);
+    }
+}
+
+function updateSendButtonIcon(currentState) {
+    const isGenerating = currentState.lastOperationId &&
+        currentState.messages.some(m => m.role === 'assistant' && m.content === '');
+    const sendBtnIcon = els.sendBtn.querySelector('.material-icons-outlined');
+    if (sendBtnIcon) {
+        sendBtnIcon.textContent = isGenerating ? 'stop' : 'send';
+    }
+}
+
+function restoreConfigUI() {
     els.systemPrompt.value = state.config.systemPrompt;
     els.autoScroll.checked = state.config.autoScroll;
     if (els.enableWebSearch) els.enableWebSearch.checked = state.config.enableWebSearch;
     if (els.themeSelect) els.themeSelect.value = state.config.theme;
-    
-    // Load Chats and Models
-    await loadSavedChats();
-    await loadModels();
-    
-    // Initialize Image Handling
-    initializeImageHandling();
-    
-    // Check for shared chat URL
-    import('./export.js').then(m => m.loadSharedChat());
-    
-    // Initialize Import Handling
-    initializeImportHandling();
-    
-    // Event Listeners
+}
+
+function initializeEventListeners() {
     els.input.addEventListener('keydown', handleInputKey);
     els.input.addEventListener('input', resizeInput);
     els.modelSearch.addEventListener('input', filterModels);
     els.freeOnlyFilter.addEventListener('change', filterModels);
+
     els.modelSelect.addEventListener('change', async (e) => {
         setState((state) => ({
             config: { ...state.config, modelId: e.target.value }
@@ -142,56 +121,54 @@ window.addEventListener('load', async () => {
         await db.settings.put({ key: 'model', value: e.target.value });
         updateCostDisplay();
     });
+
     els.systemPrompt.addEventListener('change', async (e) => {
         setState((state) => ({
             config: { ...state.config, systemPrompt: e.target.value }
         }));
         await db.settings.put({ key: 'system_prompt', value: e.target.value });
     });
+
     if (els.enableWebSearch) {
-        els.enableWebSearch.addEventListener('change', async (e) => {
-            setState((state) => ({
-                config: { ...state.config, enableWebSearch: e.target.checked }
-            }));
-            await db.settings.put({ key: 'enable_web_search', value: e.target.checked });
-        });
+        els.enableWebSearch.addEventListener('change', persistEnableWebSearch);
     }
-    
-    // Theme select event listener
+
     if (els.themeSelect) {
-        els.themeSelect.addEventListener('change', async (e) => {
-            // Handle custom theme generation option
-            if (e.target.value === 'generate-custom') {
-                handleThemeSelectChange(e);
-                return;
-            }
-            
-            setState((state) => ({
-                config: { ...state.config, theme: e.target.value }
-            }));
-            await db.settings.put({ key: 'theme', value: e.target.value });
-            // Apply theme immediately
-            import('./state.js').then(m => m.applyTheme(e.target.value));
-        });
+        els.themeSelect.addEventListener('change', handleThemeChange);
     }
-    
-    // Theme generator event listeners
+
     if (els.themeModelSearch) {
-        els.themeModelSearch.addEventListener('input', () => {
-            if (typeof filterThemeModels === 'function') {
-                filterThemeModels();
-            }
-        });
+        els.themeModelSearch.addEventListener('input', callFilterThemeModels);
     }
-    
     if (els.themeFreeOnly) {
-        els.themeFreeOnly.addEventListener('change', () => {
-            if (typeof filterThemeModels === 'function') {
-                filterThemeModels();
-            }
-        });
+        els.themeFreeOnly.addEventListener('change', callFilterThemeModels);
     }
-});
+}
+
+async function persistEnableWebSearch(e) {
+    setState((state) => ({
+        config: { ...state.config, enableWebSearch: e.target.checked }
+    }));
+    await db.settings.put({ key: 'enable_web_search', value: e.target.checked });
+}
+
+async function handleThemeChange(e) {
+    if (e.target.value === 'generate-custom') {
+        handleThemeSelectChange(e);
+        return;
+    }
+    setState((state) => ({
+        config: { ...state.config, theme: e.target.value }
+    }));
+    await db.settings.put({ key: 'theme', value: e.target.value });
+    import('./state.js').then(m => m.applyTheme(e.target.value));
+}
+
+function callFilterThemeModels() {
+    if (typeof filterThemeModels === 'function') {
+        filterThemeModels();
+    }
+}
 
 // Make sendMessage available globally for the HTML onclick
 window.sendMessage = sendMessage;
@@ -249,7 +226,7 @@ function initializeImportHandling() {
             import('./export.js').then(m => m.importChatFromJson(jsonData));
         } catch (error) {
             console.error('Failed to read import file:', error);
-            import('./ui.js').then(m => m.showToast('Failed to import chat: Invalid JSON file'));
+            emit('toast:show', 'Failed to import chat: Invalid JSON file');
         } finally {
             // Reset input so same file can be selected again
             e.target.value = '';

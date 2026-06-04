@@ -1,8 +1,6 @@
 import { state, els } from './state.js';
-import { reRenderAllMessages, getMessageText } from './chat-ui.js';
-import { showToast, showChatContextMenu } from './ui.js';
-import { newChat } from './chat.js';
-import { searchEngine } from './search.js';
+import { getMessageText } from './utils.js';
+import { emit, on } from './event-bus.js';
 import { db } from './indexeddb-storage.js';
 import { setState, subscribe } from './store.js';
 
@@ -15,7 +13,7 @@ subscribe((newState, prevState) => {
 
 // Storage & Sidebar Management
 
-export async function saveChatToStorage() {
+async function saveChatToStorage() {
     if (!state.currentChatId || state.messages.length === 0) return;
     
     let title = "New Chat";
@@ -34,13 +32,9 @@ export async function saveChatToStorage() {
 
     await db.chats.put(chatData);
     await loadSavedChats();
-    
+
     // Rebuild search index when chat is saved
-    try {
-        searchEngine.rebuildIndex();
-    } catch (error) {
-        console.warn('Failed to rebuild search index:', error);
-    }
+    emit('search:rebuild');
 }
 
 export async function getSavedChats() {
@@ -75,12 +69,12 @@ export async function loadSavedChats() {
         moreBtn.textContent = 'more_vert';
         moreBtn.onclick = (e) => {
             e.stopPropagation();
-            showChatContextMenu(e, chat.id);
+            window.showChatContextMenu(e, chat.id);
         };
 
         div.appendChild(titleSpan);
         div.appendChild(moreBtn);
-        
+
         div.onclick = () => loadChat(chat.id);
         els.savedChatsContainer.appendChild(div);
     });
@@ -93,37 +87,58 @@ window.loadChat = async function(id) {
             currentChatId: chat.id,
             messages: chat.messages
         });
-        reRenderAllMessages();
+        emit('messages:rerender');
         await loadSavedChats();
         if (window.innerWidth <= 768) els.sideBar.classList.remove('open');
-        showToast("Chat loaded");
+        emit('toast:show', "Chat loaded");
     }
 };
 
 window.deleteChat = async function(id) {
     await db.chats.delete(id);
-    
+
     // Rebuild search index when chat is deleted
-    try {
-        searchEngine.rebuildIndex();
-    } catch (error) {
-        console.warn('Failed to rebuild search index:', error);
-    }
-    
+    emit('search:rebuild');
+
     if (state.currentChatId === id) {
-        newChat(); 
+        emit('chat:new-requested');
     } else {
         await loadSavedChats();
     }
 };
 
-export async function renameChat(id, newTitle) {
+async function renameChat(id, newTitle) {
     if (!newTitle.trim()) return;
     const chat = await db.chats.get(id);
     if (chat) {
         chat.title = newTitle;
         await db.chats.put(chat);
         await loadSavedChats();
-        showToast("Chat renamed");
+        emit('toast:show', "Chat renamed");
     }
 }
+
+// Wire up listeners for events emitted by decoupled modules.
+on('chats:refresh-needed', () => {
+    loadSavedChats();
+});
+
+on('chat:new-requested', () => {
+    // Reset state and refresh list, then close sidebar on mobile.
+    setState({
+        messages: [],
+        currentChatId: null,
+        lastOperationId: Date.now()
+    });
+    els.chatContainer.innerHTML = '';
+    loadSavedChats();
+    if (window.innerWidth <= 768) els.sideBar.classList.remove('open');
+});
+
+on('chat:save', async () => {
+    await saveChatToStorage();
+});
+
+on('chat:rename', (id, newTitle) => {
+    renameChat(id, newTitle);
+});

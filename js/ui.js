@@ -1,7 +1,7 @@
 import { els, state, hasSettingsChanged, resetSettingsToOriginal } from './state.js';
-import { loadSavedChats } from './storage.js';
 import { db } from './indexeddb-storage.js';
 import { setState, getState, subscribe, themeDefinitions } from './store.js';
+import { emit, on } from './event-bus.js';
 
 // Set up reactive subscription to update image preview when attached images change
 subscribe((newState, prevState) => {
@@ -9,6 +9,12 @@ subscribe((newState, prevState) => {
         updateImagePreview();
     }
 });
+
+// Wire up toast listener for decoupled modules
+on('toast:show', (msg) => showToast(msg));
+
+// Wire up scroll-to-bottom listener for decoupled modules
+on('ui:scroll-bottom', () => scrollToBottom());
 
 // UI Utilities
 export function showToast(msg) {
@@ -33,7 +39,7 @@ export function scrollToBottom() {
 window.toggleSidebar = () => els.sideBar.classList.toggle('open');
 
 // Image Preview Management
-export async function updateImagePreview() {
+async function updateImagePreview() {
     const { state, els } = await import('./state.js');
     const imagePreview = document.getElementById('image-preview');
 
@@ -95,7 +101,7 @@ window.handleRenameChat = async () => {
     const chat = await db.chats.get(activeContextChatId);
     const newTitle = prompt("Rename chat:", chat ? chat.title : "");
     if (newTitle !== null) {
-        import('./storage.js').then(m => m.renameChat(activeContextChatId, newTitle));
+        emit('chat:rename', activeContextChatId, newTitle);
     }
     contextMenu.classList.remove('active');
 };
@@ -108,12 +114,12 @@ window.handleDeleteChat = () => {
 };
 
 window.handleExportChat = () => {
-    import('./export.js').then(m => m.exportChatAsJson(activeContextChatId));
+    emit('chat:export-json', activeContextChatId);
     contextMenu.classList.remove('active');
 };
 
 window.handleShareChat = () => {
-    import('./export.js').then(m => m.shareChat(activeContextChatId));
+    emit('chat:share', activeContextChatId);
     contextMenu.classList.remove('active');
 };
 
@@ -129,7 +135,7 @@ window.newChat = () => {
         lastOperationId: Date.now()
     });
     els.chatContainer.innerHTML = '';
-    loadSavedChats();
+    emit('chats:refresh-needed');
     if (window.innerWidth <= 768) els.sideBar.classList.remove('open');
 };
 
@@ -217,39 +223,28 @@ window.closeDeleteThemeModal = () => {
     els.deleteThemeModal.classList.remove('active');
 };
 
-window.deleteCustomTheme = () => {
+function canDeleteCurrentTheme() {
     const currentTheme = state.config.theme;
-    
-    // Don't allow deleting dark or light themes
     if (currentTheme === 'dark' || currentTheme === 'light') {
         showToast('Cannot delete built-in themes', 'error');
-        return;
+        return null;
     }
-    
-    // Check if it's a custom theme
     if (!currentTheme || !currentTheme.startsWith('custom-')) {
         showToast('No custom theme selected', 'error');
-        return;
+        return null;
     }
-    
+    return currentTheme;
+}
+
+window.deleteCustomTheme = () => {
+    if (!canDeleteCurrentTheme()) return;
     // Open confirmation modal
     openDeleteThemeModal();
 };
 
 window.confirmDeleteTheme = async () => {
-    const currentTheme = state.config.theme;
-    
-    // Don't allow deleting dark or light themes
-    if (currentTheme === 'dark' || currentTheme === 'light') {
-        showToast('Cannot delete built-in themes', 'error');
-        return;
-    }
-    
-    // Check if it's a custom theme
-    if (!currentTheme || !currentTheme.startsWith('custom-')) {
-        showToast('No custom theme selected', 'error');
-        return;
-    }
+    const currentTheme = canDeleteCurrentTheme();
+    if (!currentTheme) return;
     
     // Execute theme's onRemove JavaScript to clean up effects before deletion
     if (themeDefinitions[currentTheme]?.javascript?.onRemove) {
@@ -294,7 +289,7 @@ window.confirmDeleteTheme = async () => {
     applyTheme('dark');
     
     // Update dropdown
-    const { populateThemeDropdown } = await import('./app.js');
+    const { populateThemeDropdown } = await import('./theme-ui.js');
     populateThemeDropdown();
     
     // Close modal

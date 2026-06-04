@@ -1,6 +1,6 @@
 import { searchEngine, highlightText, formatDate, escapeHtml } from './search.js';
 import { state, els } from './state.js';
-import { showToast } from './ui.js';
+import { emit } from './event-bus.js';
 
 // Search UI Management
 class SearchUI {
@@ -261,7 +261,7 @@ class SearchUI {
     // Open current chat search
     openCurrentChatSearch() {
         if (!state.currentChatId || state.messages.length === 0) {
-            showToast('No active conversation to search');
+            emit('toast:show', 'No active conversation to search');
             return;
         }
         
@@ -558,17 +558,17 @@ class SearchUI {
     async rebuildIndex() {
         try {
             await searchEngine.rebuildIndex();
-            showToast('Search index rebuilt successfully');
+            emit('toast:show', 'Search index rebuilt successfully');
             await this.populateModelFilter();
         } catch (error) {
             console.error('Index rebuild error:', error);
-            showToast('Failed to rebuild search index');
+            emit('toast:show', 'Failed to rebuild search index');
         }
     }
 }
 
 // Create global search UI instance
-export const searchUI = new SearchUI();
+const searchUI = new SearchUI();
 
 // Make searchUI globally available for onclick handlers
 window.searchUI = searchUI;

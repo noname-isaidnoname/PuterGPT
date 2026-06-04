@@ -1,6 +1,7 @@
 import { state, els } from './state.js';
-import { getMessageText } from './chat-ui.js';
+import { getMessageText } from './utils.js';
 import { getSavedChats } from './storage.js';
+import { on } from './event-bus.js';
 
 // Search Engine Core
 class SearchEngine {
@@ -307,6 +308,13 @@ class SearchEngine {
 
 // Create global search instance
 export const searchEngine = new SearchEngine();
+
+// Listen for rebuild requests from decoupled modules
+on('search:rebuild', () => {
+    searchEngine.rebuildIndex().catch(err =>
+        console.warn('Failed to rebuild search index:', err)
+    );
+});
 
 // Utility functions
 export function escapeHtml(text) {
