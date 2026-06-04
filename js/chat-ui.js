@@ -8,7 +8,7 @@ export { getMessageText };
 // Copy Button Logic
 export function decorateCodeBlocks(root) {
     const preBlocks = root.querySelectorAll('pre');
-    
+
     preBlocks.forEach(pre => {
         if (pre.parentElement.classList.contains('code-block-wrapper')) {
             return;
@@ -21,12 +21,12 @@ export function decorateCodeBlocks(root) {
         btn.className = 'copy-btn';
         btn.title = 'Copy code';
         btn.innerHTML = '<span class="material-icons-outlined">content_copy</span>';
-        
+
         btn.onclick = (e) => {
             e.stopPropagation();
             const codeBlock = pre.querySelector('code');
             const text = codeBlock ? codeBlock.innerText : pre.innerText;
-            
+
             navigator.clipboard.writeText(text).then(() => {
                 btn.innerHTML = '<span class="material-icons-outlined">check</span>';
                 btn.classList.add('copied');
@@ -42,6 +42,31 @@ export function decorateCodeBlocks(root) {
         pre.parentNode.insertBefore(wrapper, pre);
         wrapper.appendChild(pre);
         wrapper.appendChild(btn);
+
+        // Add a "Run" button for HTML / JavaScript code blocks.
+        // The function `isRunnableLanguage` and `openCodeRunner` are exposed on
+        // `window` by `js/code-runner.js`, which is loaded as a side-effect from
+        // `js/app.js`, so they are available here at runtime.
+        const codeBlock = pre.querySelector('code');
+        if (codeBlock && typeof window.isRunnableLanguage === 'function' && typeof window.openCodeRunner === 'function') {
+            const langClass = Array.from(codeBlock.classList).find(c => c.startsWith('language-'));
+            const lang = langClass ? langClass.replace('language-', '') : '';
+            const runnable = window.isRunnableLanguage(lang);
+            if (runnable) {
+                const runBtn = document.createElement('button');
+                runBtn.className = `run-btn run-btn-${runnable}`;
+                runBtn.title = runnable === 'html' ? 'Preview HTML' : 'Run JavaScript';
+                runBtn.innerHTML = '<span class="material-icons-outlined">play_arrow</span>';
+                runBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    const text = codeBlock.innerText;
+                    window.openCodeRunner(text, runnable);
+                };
+                // Insert the run button just before the copy button so copy keeps
+                // its top-right anchor and the run button sits to its left.
+                wrapper.insertBefore(runBtn, btn);
+            }
+        }
     });
 }
 

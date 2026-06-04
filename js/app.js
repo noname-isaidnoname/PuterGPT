@@ -9,6 +9,7 @@ import { deepDiff } from './utils.js';
 import { populateThemeDropdown } from './theme-ui.js';
 import './search-ui.js'; // Initializes search UI globally
 import './theme-generator.js'; // Initialize theme generator
+import './code-runner.js'; // Initializes code runner modal (HTML/JS preview) globally
 import { loadCustomThemes, handleThemeSelectChange } from './theme-generator.js';
 import { emit } from './event-bus.js';
 

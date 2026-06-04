@@ -91,7 +91,28 @@ export const themeDefinitions = {
       '--chat-bg-pattern': 'none',
       '--glow-effect': 'rgba(16, 163, 127, 0.5)',
       '--transition-speed': '0.2s',
-      '--animation-easing': 'ease-out'
+      '--animation-easing': 'ease-out',
+      '--runner-iframe-bg': '#ffffff',
+
+      '--runner-btn-size':           '32px',
+      '--runner-btn-top':            '12px',
+      '--runner-btn-right':          '52px',
+      '--runner-btn-color-idle':     'var(--text-secondary)',
+      '--runner-btn-bg-idle':        'var(--bg-secondary)',
+      '--runner-btn-color-hover':    '#fff',
+      '--runner-btn-bg-hover':       'var(--accent)',
+      '--runner-btn-border-hover':   'var(--accent)',
+      '--runner-btn-opacity-idle':   '0.7',
+      '--runner-btn-opacity-hover':  '1',
+      '--runner-btn-icon-size':      '16px',
+      
+      '--runner-modal-width':        '90vw',
+      '--runner-modal-max-width':    '90vw',
+      '--runner-modal-height':       '85vh',
+      '--runner-modal-max-height':   '85vh',
+      '--runner-modal-header-pad':   '12px 16px',
+      '--runner-modal-title-size':   '1rem',
+      '--runner-modal-iframe-min':   '60vh'
     }
   },
   light: {
@@ -158,7 +179,28 @@ export const themeDefinitions = {
       '--chat-bg-pattern': 'none',
       '--glow-effect': 'rgba(16, 163, 127, 0.3)',
       '--transition-speed': '0.2s',
-      '--animation-easing': 'ease-out'
+      '--animation-easing': 'ease-out',
+      '--runner-iframe-bg': '#ffffff',
+
+      '--runner-btn-size':           '32px',
+      '--runner-btn-top':            '12px',
+      '--runner-btn-right':          '52px',
+      '--runner-btn-color-idle':     'var(--text-secondary)',
+      '--runner-btn-bg-idle':        'var(--bg-secondary)',
+      '--runner-btn-color-hover':    '#fff',
+      '--runner-btn-bg-hover':       'var(--accent)',
+      '--runner-btn-border-hover':   'var(--accent)',
+      '--runner-btn-opacity-idle':   '0.7',
+      '--runner-btn-opacity-hover':  '1',
+      '--runner-btn-icon-size':      '16px',
+      
+      '--runner-modal-width':        '90vw',
+      '--runner-modal-max-width':    '90vw',
+      '--runner-modal-height':       '85vh',
+      '--runner-modal-max-height':   '85vh',
+      '--runner-modal-header-pad':   '12px 16px',
+      '--runner-modal-title-size':   '1rem',
+      '--runner-modal-iframe-min':   '60vh'
     }
   },
   };

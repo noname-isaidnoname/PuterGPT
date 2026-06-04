@@ -3,7 +3,7 @@ import { state, els } from './state.js';
 import { tokenManager } from './token-manager.js';
 import { setState } from './store.js';
 import { estimateTokens, calculateMessageCost } from './models.js';
-import { emit, on } from './event-bus.js';
+import { emit } from './event-bus.js';
 import { decorateCodeBlocks } from './chat-ui.js';
 
 // Global operation lock to prevent concurrent API calls

@@ -86,3 +86,44 @@
 .code-block-wrapper pre {
     margin: 0;
 }
+
+/* Run Button Styles (sits to the left of the copy button).
+   All values are sourced from `js/store.js` via CSS variables. */
+.run-btn {
+    position: absolute;
+    top: var(--runner-btn-top);
+    right: var(--runner-btn-right);
+    background: var(--runner-btn-bg-idle);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    color: var(--runner-btn-color-idle);
+    cursor: pointer;
+    padding: 6px;
+    width: var(--runner-btn-size);
+    height: var(--runner-btn-size);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: var(--runner-btn-opacity-idle);
+    transition: all 0.2s ease;
+    z-index: 5;
+}
+
+.run-btn:hover {
+    background: var(--runner-btn-bg-hover);
+    border-color: var(--runner-btn-border-hover);
+    color: var(--runner-btn-color-hover);
+    opacity: var(--runner-btn-opacity-hover);
+}
+
+.run-btn.running {
+    background: var(--runner-btn-bg-hover);
+    border-color: var(--runner-btn-border-hover);
+    color: var(--runner-btn-color-hover);
+    opacity: var(--runner-btn-opacity-hover);
+}
+
+.run-btn .material-icons-outlined {
+    font-size: var(--runner-btn-icon-size);
+    line-height: 1;
+}

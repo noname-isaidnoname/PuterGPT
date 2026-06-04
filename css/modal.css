@@ -108,3 +108,57 @@ select:focus, input[type="text"]:focus, input[type="password"]:focus {
     margin-bottom: 20px;
     color: var(--text-secondary);
 }
+
+/* Code Runner Modal.
+   All values are sourced from `js/store.js` via CSS variables. */
+.code-runner-modal {
+    max-width: var(--runner-modal-max-width);
+    width: var(--runner-modal-width);
+    height: var(--runner-modal-height);
+    max-height: var(--runner-modal-max-height);
+    padding: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.code-runner-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--runner-modal-header-pad);
+    border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
+}
+
+.code-runner-header h3 {
+    margin: 0;
+    font-size: var(--runner-modal-title-size);
+    font-weight: 600;
+}
+
+.code-runner-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.code-runner-header-actions .action-btn {
+    color: var(--text-secondary);
+    padding: 6px;
+    border-radius: var(--radius-sm);
+}
+
+.code-runner-header-actions .action-btn:hover {
+    background: var(--hover-light);
+    color: var(--text-primary);
+}
+
+#code-runner-iframe {
+    flex: 1;
+    width: 100%;
+    border: 0;
+    background: var(--runner-iframe-bg);
+    display: block;
+    min-height: var(--runner-modal-iframe-min);
+}

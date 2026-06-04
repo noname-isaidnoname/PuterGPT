@@ -286,6 +286,24 @@
         </div>
     </div>
 
+    <!-- Code Runner Modal -->
+    <div class="modal-overlay" id="code-runner-modal">
+        <div class="modal code-runner-modal">
+            <div class="code-runner-header">
+                <h3 id="code-runner-title">Preview</h3>
+                <div class="code-runner-header-actions">
+                    <button class="action-btn" id="code-runner-open-new-tab" type="button" onclick="openCodeRunnerInNewTab()" title="Open in new tab">
+                        <span class="material-icons-outlined" style="font-size:18px">open_in_new</span>
+                    </button>
+                    <button class="action-btn" type="button" onclick="closeCodeRunner()" title="Close">
+                        <span class="material-icons-outlined" style="font-size:18px">close</span>
+                    </button>
+                </div>
+            </div>
+            <iframe id="code-runner-iframe" title="Code output"></iframe>
+        </div>
+    </div>
+
     <!-- Delete Theme Confirmation Modal -->
     <div class="modal-overlay" id="delete-theme-modal">
         <div class="modal" style="max-width: 400px;">
