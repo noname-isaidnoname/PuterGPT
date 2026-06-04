@@ -22,12 +22,24 @@ async function saveChatToStorage() {
         const contentText = getMessageText(firstUserMsg);
         title = contentText.substring(0, 25) + (contentText.length > 25 ? '...' : '');
     }
+
+    // Capture the system prompt at chat start so it can be exported with
+    // the conversation. Prefer the first user message's snapshot (the
+    // prompt that was actually active for the first AI response) and fall
+    // back to the current global setting for legacy chats that don't have
+    // per-message snapshots.
+    const initialSystemPrompt = (firstUserMsg && firstUserMsg.systemPrompt !== undefined)
+        ? firstUserMsg.systemPrompt
+        : (state.config && typeof state.config.systemPrompt === 'string'
+            ? state.config.systemPrompt
+            : '');
     
     const chatData = {
         id: state.currentChatId,
         title: title,
         messages: state.messages,
-        lastModified: Date.now()
+        lastModified: Date.now(),
+        systemPrompt: initialSystemPrompt
     };
 
     await db.chats.put(chatData);

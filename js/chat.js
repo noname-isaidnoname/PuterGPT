@@ -113,7 +113,11 @@ async function processUserTurn(text) {
     const newMessage = {
         role: 'user',
         content: messageContent,
-        images: hasImagesForApi ? state.attachedImages.map(img => img.dataUrl) : null
+        images: hasImagesForApi ? state.attachedImages.map(img => img.dataUrl) : null,
+        // Snapshot the system prompt that will be used for the AI's response
+        // to this turn. Consumers of the exported JSON can use this to
+        // understand which prompt influenced each assistant response.
+        systemPrompt: state.config.systemPrompt
     };
     
     setState((state) => ({

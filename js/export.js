@@ -27,6 +27,11 @@ async function exportChatAsJson(chatId) {
             exportedAt: new Date().toISOString(),
             lastModified: new Date(chat.lastModified).toISOString(),
             messageCount: chat.messages.length,
+            // Top-level system prompt that was active at the start of the
+            // chat. Falls back to the empty string for legacy chats that
+            // predate this field. Per-turn snapshots are kept on each user
+            // message in `messages` below.
+            systemPrompt: typeof chat.systemPrompt === 'string' ? chat.systemPrompt : '',
             messages: chat.messages
         };
 
@@ -140,6 +145,12 @@ export function importChatFromJson(jsonData) {
             throw new Error('Invalid chat format: missing messages array');
         }
 
+        // Note: any `systemPrompt` field present in the imported JSON
+        // (top-level and per-message) is intentionally NOT applied to
+        // the user's own settings. It is kept on the imported chat
+        // record and messages for reference only, so the user can see
+        // which prompts were used in the original conversation.
+
         const newChatId = generateUniqueId();
 
         const chatData = {
@@ -148,7 +159,10 @@ export function importChatFromJson(jsonData) {
             messages: jsonData.messages,
             lastModified: Date.now(),
             importedAt: new Date().toISOString(),
-            originalExportedAt: jsonData.exportedAt
+            originalExportedAt: jsonData.exportedAt,
+            // Preserve the original starting system prompt for reference.
+            // It is NOT used as the active system prompt going forward.
+            systemPrompt: typeof jsonData.systemPrompt === 'string' ? jsonData.systemPrompt : ''
         };
 
         setState({
@@ -159,7 +173,8 @@ export function importChatFromJson(jsonData) {
         db.chats.put(chatData).then(() => {
             emit('messages:rerender');
             emit('chats:refresh-needed');
-            emit('toast:show', `Imported and saved chat: ${chatData.title} (${jsonData.messageCount || jsonData.messages.length} messages)`);
+            const msgCount = jsonData.messageCount || jsonData.messages.length;
+            emit('toast:show', `Imported and saved chat: ${chatData.title} (${msgCount} messages)`);
         });
     } catch (error) {
         console.error('Failed to import chat:', error);

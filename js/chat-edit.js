@@ -56,7 +56,16 @@ function readEditTextarea(index) {
 function commitMessageEdit(index, newContent, { truncate = false } = {}) {
     setState((state) => {
         const newMessages = [...state.messages];
-        newMessages[index] = { ...newMessages[index], content: newContent };
+        const updatedMessage = { ...newMessages[index], content: newContent };
+        // When regenerating from a user message, refresh the system prompt
+        // snapshot so the export reflects the prompt that will be (or just
+        // was) used for the new assistant response. Assistant message edits
+        // don't change the prompt that originally produced the response,
+        // so we leave that snapshot untouched.
+        if (truncate && newMessages[index].role === 'user') {
+            updatedMessage.systemPrompt = state.config.systemPrompt;
+        }
+        newMessages[index] = updatedMessage;
         return { messages: truncate ? newMessages.slice(0, index + 1) : newMessages };
     });
     emit('messages:rerender');
