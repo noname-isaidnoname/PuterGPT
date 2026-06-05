@@ -16,27 +16,80 @@ on('toast:show', (msg, type) => showToast(msg, type));
 // Wire up scroll-to-bottom listener
 on('ui:scroll-bottom', () => scrollToBottom());
 
-// UI Utilities
+// Toast Pool - manages up to 3 concurrent toasts
+const MAX_TOASTS = 3;
+const TOAST_VISIBLE_DURATION = 2500;
+const TOAST_GAP = 8;
+const TOAST_HIDDEN_BOTTOM = -100;
+const toastPool = [];
+
+function updateToastPositions() {
+    let currentBottom = 0;
+    for (let i = 0; i < toastPool.length; i++) {
+        const toastObj = toastPool[i];
+        toastObj.element.style.bottom = `${currentBottom}px`;
+        currentBottom += toastObj.element.offsetHeight + TOAST_GAP;
+    }
+}
+
+function removeToast(toastObj) {
+    clearTimeout(toastObj.fadeOutTimer);
+    clearTimeout(toastObj.hideTimer);
+    // Slide out downward and fade
+    toastObj.element.style.bottom = `${TOAST_HIDDEN_BOTTOM}px`;
+    toastObj.element.classList.remove('show');
+    toastObj.element.classList.add('hiding');
+    toastObj.hideTimer = setTimeout(() => {
+        toastObj.element.remove();
+        const idx = toastPool.indexOf(toastObj);
+        if (idx !== -1) toastPool.splice(idx, 1);
+        updateToastPositions();
+    }, 300);
+}
+
+function removeToastImmediate(toastObj) {
+    clearTimeout(toastObj.fadeOutTimer);
+    clearTimeout(toastObj.hideTimer);
+    toastObj.element.remove();
+    const idx = toastPool.indexOf(toastObj);
+    if (idx !== -1) toastPool.splice(idx, 1);
+}
+
 export function showToast(msg, type = 'info') {
     // Normalize type: 'warn' -> 'warning'
     const normalizedType = type === 'warn' ? 'warning' : type;
     
-    // Remove any existing type classes
-    els.toast.classList.remove('info', 'warning', 'error', 'success');
+    // If pool is full, remove the oldest toast immediately
+    if (toastPool.length >= MAX_TOASTS) {
+        const oldest = toastPool.shift();
+        removeToastImmediate(oldest);
+    }
     
-    // Add the new type class
-    els.toast.classList.add(normalizedType);
+    // Create a new toast element
+    const toastEl = document.createElement('div');
+    toastEl.className = 'toast';
+    toastEl.classList.add(normalizedType);
+    toastEl.textContent = msg;
+    // Start off-screen below
+    toastEl.style.bottom = `${TOAST_HIDDEN_BOTTOM}px`;
+    els.toastContainer.appendChild(toastEl);
     
-    els.toast.textContent = msg;
-    els.toast.classList.add('show');
-    els.toast.classList.remove('hiding');
-    setTimeout(() => {
-        els.toast.classList.remove('show');
-        els.toast.classList.add('hiding');
-        setTimeout(() => {
-            els.toast.classList.remove('hiding');
-        }, 250);
-    }, 2500);
+    const toastObj = { element: toastEl, fadeOutTimer: null, hideTimer: null };
+    toastPool.push(toastObj);
+    
+    // Double rAF: first frame commits the initial bottom:-100px state,
+    // second frame updates positions and adds .show to trigger both transitions
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            updateToastPositions();
+            toastEl.classList.add('show');
+        });
+    });
+    
+    // Schedule fade-out
+    toastObj.fadeOutTimer = setTimeout(() => {
+        removeToast(toastObj);
+    }, TOAST_VISIBLE_DURATION);
 }
 
 export function scrollToBottom() {

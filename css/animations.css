@@ -31,22 +31,33 @@
     } 
 }
 
+/* Toast Container */
+#toast-container {
+    position: fixed;
+    bottom: 40px;
+    left: 50%;
+    transform: translateX(-50%);
+    pointer-events: none;
+    z-index: 1000;
+}
+
+/* Individual Toast */
 .toast { 
-    position: fixed; 
-    bottom: 40px; 
-    left: 50%; 
-    transform: translateX(-50%) translateY(100px); 
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: -100px;
     background: var(--toast-info-bg); 
     color: var(--toast-info-text); 
     padding: 12px 20px; 
     border-radius: var(--radius-lg); 
     font-size: 0.875rem; 
     opacity: 0; 
-    transition: opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1), transform 0.25s cubic-bezier(0.4, 0, 0.2, 1); 
+    transition: bottom 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1); 
     pointer-events: none; 
     border: 1px solid var(--toast-info-border);
     box-shadow: var(--shadow-md);
-    z-index: 1000;
+    white-space: nowrap;
 }
 
 /* Toast type variants - no transition on colors to prevent color shifting */
@@ -76,12 +87,10 @@
 
 .toast.show {
     opacity: 1;
-    transform: translateX(-50%) translateY(0);
 }
 
 .toast.hiding {
     opacity: 0;
-    transform: translateX(-50%) translateY(100px);
 }
 
 .hidden { 

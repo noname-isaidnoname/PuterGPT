@@ -252,7 +252,7 @@ export const els = {
     themeSelect: document.getElementById('theme-select'),
     settingsModal: document.getElementById('settings-modal'),
     settingsConfirmModal: document.getElementById('settings-confirm-modal'),
-    toast: document.getElementById('toast'),
+    toastContainer: document.getElementById('toast-container'),
     sideBar: document.getElementById('sidebar'),
     autoScroll: document.getElementById('auto-scroll'),
     enableWebSearch: document.getElementById('enable-web-search'),
