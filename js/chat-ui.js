@@ -181,7 +181,7 @@ export function reRenderAllMessages() {
     emit('ui:scroll-bottom');
 }
 
-// Listen for message-append events from decoupled modules (chat.js, chat-api.js)
+// Listen for message-append events
 on('message:append', (index, message, isTyping = false) => {
     renderMessage(index, message, isTyping);
 });

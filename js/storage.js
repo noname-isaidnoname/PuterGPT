@@ -130,7 +130,7 @@ async function renameChat(id, newTitle) {
     }
 }
 
-// Wire up listeners for events emitted by decoupled modules.
+// Wire up listeners
 on('chats:refresh-needed', () => {
     loadSavedChats();
 });

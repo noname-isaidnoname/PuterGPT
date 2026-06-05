@@ -10,10 +10,10 @@ subscribe((newState, prevState) => {
     }
 });
 
-// Wire up toast listener for decoupled modules
+// Wire up toast listener
 on('toast:show', (msg) => showToast(msg));
 
-// Wire up scroll-to-bottom listener for decoupled modules
+// Wire up scroll-to-bottom listener
 on('ui:scroll-bottom', () => scrollToBottom());
 
 // UI Utilities

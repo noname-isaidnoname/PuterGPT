@@ -309,7 +309,7 @@ class SearchEngine {
 // Create global search instance
 export const searchEngine = new SearchEngine();
 
-// Listen for rebuild requests from decoupled modules
+// Listen for rebuild requests
 on('search:rebuild', () => {
     searchEngine.rebuildIndex().catch(err =>
         console.warn('Failed to rebuild search index:', err)

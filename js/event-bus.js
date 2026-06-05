@@ -1,6 +1,4 @@
-// Tiny pub/sub event bus — used to decouple modules and break circular dependencies.
-// No imports, no globals, no side-effects.
-
+// Tiny pub/sub event bus
 const listeners = new Map();
 
 export function on(event, fn) {
