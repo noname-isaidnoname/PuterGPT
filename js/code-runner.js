@@ -178,7 +178,7 @@ function openInNewTab() {
     const win = window.open(url, '_blank', 'noopener,noreferrer');
     if (!win) {
         // Popup blocked; Show a toast
-        emit('toast:show', 'Popup blocked. Could not open in new tab. Try allowing popups for this site.');
+        emit('toast:show', 'Popup blocked. Could not open in new tab. Try allowing popups for this site.', 'error');
     } else {
         // Revoke the URL once the new tab has had a chance to load it.
         setTimeout(() => URL.revokeObjectURL(url), 30000);

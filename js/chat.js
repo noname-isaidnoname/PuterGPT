@@ -46,7 +46,7 @@ export async function sendMessage() {
     const currentToken = await tokenManager.getCurrentToken();
     if (!currentToken) {
         openSettings();
-        emit('toast:show', "Please add at least one token in Settings!");
+        emit('toast:show', "Please add at least one token in Settings!", 'error');
         return;
     }
 

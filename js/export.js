@@ -16,7 +16,7 @@ async function exportChatAsJson(chatId) {
         const chat = await db.chats.get(chatId);
 
         if (!chat) {
-            emit('toast:show', 'Chat not found');
+            emit('toast:show', 'Chat not found', 'error');
             return;
         }
 
@@ -42,7 +42,7 @@ async function exportChatAsJson(chatId) {
             `${chat.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_${chat.id}.json`
         );
 
-        emit('toast:show', 'Chat exported successfully');
+        emit('toast:show', 'Chat exported successfully', 'success');
     } catch (error) {
         console.error('Failed to export chat:', error);
         showToast('Failed to export chat');
@@ -54,7 +54,7 @@ async function shareChat(chatId) {
         const chat = await db.chats.get(chatId);
 
         if (!chat) {
-            emit('toast:show', 'Chat not found');
+            emit('toast:show', 'Chat not found', 'error');
             return;
         }
 
@@ -68,7 +68,7 @@ async function shareChat(chatId) {
         // Copy to clipboard
         if (navigator.clipboard && navigator.clipboard.writeText) {
             await navigator.clipboard.writeText(shareUrl);
-            emit('toast:show', 'Share link copied to clipboard');
+            emit('toast:show', 'Share link copied to clipboard', 'success');
         } else {
             // Fallback for browsers without clipboard API
             const textArea = document.createElement('textarea');
@@ -82,17 +82,17 @@ async function shareChat(chatId) {
 
             try {
                 document.execCommand('copy');
-                emit('toast:show', 'Share link copied to clipboard');
+                emit('toast:show', 'Share link copied to clipboard', 'success');
             } catch (error) {
                 console.error('Failed to copy share link:', error);
-                emit('toast:show', 'Failed to copy share link. URL: ' + shareUrl);
+                emit('toast:show', 'Failed to copy share link. URL: ' + shareUrl, 'error');
             } finally {
                 document.body.removeChild(textArea);
             }
         }
     } catch (error) {
         console.error('Failed to share chat:', error);
-        emit('toast:show', 'Failed to generate share link');
+        emit('toast:show', 'Failed to generate share link', 'error');
     }
 }
 
@@ -123,14 +123,14 @@ export function loadSharedChat() {
                 db.chats.put(chatData).then(() => {
                     emit('messages:rerender');
                     emit('chats:refresh-needed');
-                    emit('toast:show', `Loaded and saved shared chat: ${chatData.title} (${sharedData.messages.length} messages)`);
+                    emit('toast:show', `Loaded and saved shared chat: ${chatData.title} (${sharedData.messages.length} messages)`, 'success');
                     window.history.replaceState(null, null, window.location.pathname);
                 });
             }
         });
     } catch (error) {
         console.error('Failed to load shared chat:', error);
-        emit('toast:show', 'Failed to load shared conversation');
+        emit('toast:show', 'Failed to load shared conversation', 'error');
     }
 }
 
@@ -174,10 +174,10 @@ export function importChatFromJson(jsonData) {
             emit('messages:rerender');
             emit('chats:refresh-needed');
             const msgCount = jsonData.messageCount || jsonData.messages.length;
-            emit('toast:show', `Imported and saved chat: ${chatData.title} (${msgCount} messages)`);
+            emit('toast:show', `Imported and saved chat: ${chatData.title} (${msgCount} messages)`, 'success');
         });
     } catch (error) {
         console.error('Failed to import chat:', error);
-        emit('toast:show', `Failed to import chat: ${error.message}`);
+        emit('toast:show', `Failed to import chat: ${error.message}`, 'error');
     }
 }

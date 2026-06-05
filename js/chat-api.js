@@ -297,6 +297,6 @@ export function abortAssistantResponse() {
         });
 
         // Show feedback to user
-        emit('toast:show', 'Response generation stopped', 'info');
+        emit('toast:show', 'Response generation stopped');
     }
 }

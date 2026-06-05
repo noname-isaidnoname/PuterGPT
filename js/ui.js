@@ -11,13 +11,22 @@ subscribe((newState, prevState) => {
 });
 
 // Wire up toast listener
-on('toast:show', (msg) => showToast(msg));
+on('toast:show', (msg, type) => showToast(msg, type));
 
 // Wire up scroll-to-bottom listener
 on('ui:scroll-bottom', () => scrollToBottom());
 
 // UI Utilities
-export function showToast(msg) {
+export function showToast(msg, type = 'info') {
+    // Normalize type: 'warn' -> 'warning'
+    const normalizedType = type === 'warn' ? 'warning' : type;
+    
+    // Remove any existing type classes
+    els.toast.classList.remove('info', 'warning', 'error', 'success');
+    
+    // Add the new type class
+    els.toast.classList.add(normalizedType);
+    
     els.toast.textContent = msg;
     els.toast.classList.add('show');
     els.toast.classList.remove('hiding');

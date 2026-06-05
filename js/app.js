@@ -227,7 +227,7 @@ function initializeImportHandling() {
             import('./export.js').then(m => m.importChatFromJson(jsonData));
         } catch (error) {
             console.error('Failed to read import file:', error);
-            emit('toast:show', 'Failed to import chat: Invalid JSON file');
+            emit('toast:show', 'Failed to import chat: Invalid JSON file', 'error');
         } finally {
             // Reset input so same file can be selected again
             e.target.value = '';

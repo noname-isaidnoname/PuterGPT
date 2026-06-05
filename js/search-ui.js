@@ -558,11 +558,11 @@ class SearchUI {
     async rebuildIndex() {
         try {
             await searchEngine.rebuildIndex();
-            emit('toast:show', 'Search index rebuilt successfully');
+            emit('toast:show', 'Search index rebuilt successfully', 'success');
             await this.populateModelFilter();
         } catch (error) {
             console.error('Index rebuild error:', error);
-            emit('toast:show', 'Failed to rebuild search index');
+            emit('toast:show', 'Failed to rebuild search index', 'error');
         }
     }
 }
