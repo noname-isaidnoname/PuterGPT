@@ -1,4 +1,4 @@
-// Theme dropdown UI — isolated from app.js to break the app.js hub cycle.
+// Theme dropdown UI
 import { themeDefinitions } from './store.js';
 import { els } from './state.js';
 
