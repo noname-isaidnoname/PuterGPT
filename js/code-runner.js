@@ -5,6 +5,9 @@ import { emit } from './event-bus.js';
 const RUNNABLE_HTML = new Set(['html', 'xhtml']);
 const RUNNABLE_JS = new Set(['javascript', 'js', 'jsx', 'mjs', 'cjs', 'ts', 'typescript']);
 
+/** Track the latest blob URL so we can revoke it on close. */
+let _pendingBlobUrl = null;
+
 function buildJsShell() {
     return `<!doctype html>
 <html>
@@ -165,23 +168,52 @@ function closeCodeRunner() {
         // Clear srcdoc to fully tear down the previous run before the next open.
         iframe.srcdoc = '';
     }
+
+    // Clean up any leftover blob URL from an interrupted openInNewTab call.
+    if (_pendingBlobUrl) {
+        URL.revokeObjectURL(_pendingBlobUrl);
+        _pendingBlobUrl = null;
+    }
 }
 
 function openInNewTab() {
     const overlay = getOverlay();
     if (!overlay) return;
-    const code = overlay.dataset.code || '';
-    const lang = overlay.dataset.lang || 'html';
-    const html = lang === 'html' ? code : buildJsShell().replace('__USER_CODE__', safeUserCode(code));
-    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const win = window.open(url, '_blank', 'noopener,noreferrer');
-    if (!win) {
-        // Popup blocked; Show a toast
-        emit('toast:show', 'Popup blocked. Could not open in new tab. Try allowing popups for this site.', 'error');
-    } else {
-        // Revoke the URL once the new tab has had a chance to load it.
-        setTimeout(() => URL.revokeObjectURL(url), 30000);
+    try {
+        const code = overlay.dataset.code || '';
+        const lang = overlay.dataset.lang || 'html';
+        const html = lang === 'html' ? code : buildJsShell().replace('__USER_CODE__', safeUserCode(code));
+        const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+
+        // Revoke the previous blob URL if one was never cleaned up.
+        if (_pendingBlobUrl) {
+            URL.revokeObjectURL(_pendingBlobUrl);
+        }
+        _pendingBlobUrl = url;
+
+        // blob: URLs are always same-origin, so noopener/noreferrer is unnecessary
+        // and was the root cause of the false 'popup blocked' bug: some browsers
+        // return null from window.open(…, 'noopener') even when the tab opens.
+        const win = window.open(url, '_blank');
+
+        if (!win) {
+            // Popup was truly blocked (no reference returned).
+            URL.revokeObjectURL(url);
+            if (_pendingBlobUrl === url) _pendingBlobUrl = null;
+
+            emit('toast:show',
+                'Popup blocked. Could not open in new tab. Try allowing popups for this site.',
+                'error');
+            return;
+        }
+
+        // Tab opened successfully. The blob URL stays alive until the code
+        // runner modal is closed (see closeCodeRunner), so the new tab can
+        // be refreshed as many times as needed in the meantime.
+    } catch (err) {
+        console.error('[code-runner] Failed to open in new tab:', err);
+        emit('toast:show', 'Failed to open in new tab. See console for details.', 'error');
     }
 }
 
