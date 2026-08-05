@@ -169,9 +169,31 @@
                 <button id="send-btn" onclick="handleSendButtonClick()"><span class="material-icons-outlined">send</span></button>
             </div>
             <div id="image-preview" class="image-preview" style="display: none;"></div>
-            <div style="position:absolute; bottom:5px; font-size:0.7rem; color:#888;">
+
+            <div style="position:absolute; bottom:5px; font-size:0.7rem; color:#888;" id="puter-footer">
                 Powered by Puter API -- Double check responses!
             </div>
+            <script>
+            (() => {
+                // Check if current origin is a websim.com domain
+                const isWebsimDomain = window.location.hostname.includes('websim.com');
+                // update existing footer if it exists
+                const footer = document.getElementById('puter-footer');
+                if (footer) {
+                    footer.innerHTML = isWebsimDomain 
+                        ? 'Powered by Puter API -- Double check responses!'
+                        : `Powered by Puter API -- Double check responses! Visit <a href="https://websim.com/@noname_isaidnoname/putergpt">websim.com/@noname_isaidnoname/putergpt</a> to support the creator!`;
+                } else {
+                    // create new footer if it doesn't exist
+                    footer = document.createElement('div');
+                    footer.id = 'puter-footer';
+                    footer.innerHTML = isWebsimDomain 
+                        ? 'Powered by Puter API -- Double check responses!'
+                        : `Powered by Puter API -- Double check responses! Visit <a href="https://websim.com/@noname_isaidnoname/putergpt">websim.com/@noname_isaidnoname/putergpt</a> to support the creator!`;
+                    document.body.appendChild(footer);
+                }
+            })();
+            </script>
         </div>
     </main>
 
