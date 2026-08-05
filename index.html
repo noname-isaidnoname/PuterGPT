@@ -175,8 +175,8 @@
             </div>
             <script>
             (() => {
-                // Check if current origin is a websim.com domain
-                const isWebsimDomain = window.location.hostname.includes('websim.com');
+                // Check if current origin is a websim.com-hosted site
+                const isWebsimDomain = window.location.hostname.includes('.c.websim.com');
                 // update existing footer if it exists
                 const footer = document.getElementById('puter-footer');
                 if (footer) {
