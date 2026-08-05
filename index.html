@@ -175,21 +175,64 @@
             </div>
             <script>
             (() => {
-                // Check if current origin is a websim.com-hosted site
-                const isWebsimDomain = window.location.hostname.includes('.c.websim.com');
-                // update existing footer if it exists
-                const footer = document.getElementById('puter-footer');
-                if (footer) {
-                    footer.innerHTML = isWebsimDomain 
-                        ? 'Powered by Puter API -- Double check responses!'
-                        : `Powered by Puter API -- Double check responses! Visit <a href="https://websim.com/@noname_isaidnoname/putergpt">websim.com/@noname_isaidnoname/putergpt</a> to support the creator!`;
+                // Detect if this app is running on a websim.com page, either because it's
+                // hosted directly on websim (e.g. putergpt.on.c.websim.com) OR because it's
+                // hosted elsewhere (e.g. GitHub Pages) and embedded in a websim.com page
+                // via iframe -- in that case window.location.hostname points at the
+                // GitHub Pages host, so we must also inspect the embedding context.
+                function isWebsimPage() {
+                    const host = window.location.hostname;
+
+                    // Hosted directly on a websim.com subdomain
+                    if (host === 'websim.com' || host.endsWith('.websim.com')) {
+                        // console.log("Direct success");
+                        return true;
+                    } else {
+                        // console.log("Direct fail");
+                    }
+
+                    // Embedded in a websim.com page via iframe: the top-level page's origin
+                    // is exposed via window.location.ancestorOrigins (Chrome/Edge/Firefox).
+                    try {
+                        const ancestors = window.location.ancestorOrigins;
+                        if (ancestors) {
+                            for (let i = 0; i < ancestors.length; i++) {
+                                if (ancestors[i].includes('websim.com')) {
+                                    // console.log("Ancestor success");
+                                    return true;
+                                } else {
+                                    // console.log("Ancestor fail");
+                                }
+                            }
+                        }
+                    } catch (e) {}
+
+                    // Fallback for browsers without ancestorOrigins (e.g. Safari):
+                    // document.referrer holds the URL of the embedding page.
+                    try {
+                        if (document.referrer && document.referrer.includes('websim.com')) {
+                            // console.log("Referrer success");
+                            return true;
+                        } else {
+                            // console.log("Referrer fail");
+                        }
+                    } catch (e) {}
+
+                    return false;
+                }
+
+                const isWebsim = isWebsimPage();
+                const footerContent = isWebsim
+                    ? 'Powered by Puter API -- Double check responses!'
+                    : 'Powered by Puter API -- Double check responses! Visit <a href="https://websim.com/@noname_isaidnoname/putergpt">websim.com/@noname_isaidnoname/putergpt</a> to support the creator!';
+
+                const existingFooter = document.getElementById('puter-footer');
+                if (existingFooter) {
+                    existingFooter.innerHTML = footerContent;
                 } else {
-                    // create new footer if it doesn't exist
-                    footer = document.createElement('div');
+                    const footer = document.createElement('div');
                     footer.id = 'puter-footer';
-                    footer.innerHTML = isWebsimDomain 
-                        ? 'Powered by Puter API -- Double check responses!'
-                        : `Powered by Puter API -- Double check responses! Visit <a href="https://websim.com/@noname_isaidnoname/putergpt">websim.com/@noname_isaidnoname/putergpt</a> to support the creator!`;
+                    footer.innerHTML = footerContent;
                     document.body.appendChild(footer);
                 }
             })();
