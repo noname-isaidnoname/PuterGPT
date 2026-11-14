@@ -122,7 +122,7 @@ If `playwright` is installed but `chromium` binary isn't, Don't ask the user whe
 
 ## Commit conventions
 
-Short imperative summaries (`redesign: …` is fine). No attribution of tools/models in commit messages or code comments. Only commit what the user asked to be committed; the working tree should stay clean of scratch files (no `.fallow/`, `node_modules`, screenshots — none of those belong in this repo). When in doubt about unrelated changes in the working tree, leave them alone.
+Short imperative summaries (`redesign: …` is fine). No attribution of tools/models in commit messages or code comments. Only commit what the user asked to be committed or if they simply asked to; the working tree should stay clean of scratch files (no `.fallow/`, `node_modules`, screenshots — none of those belong in this repo). When in doubt about unrelated changes in the working tree, leave them alone.
 
 ## Updating this file
 
