@@ -58,10 +58,11 @@ python3 -m http.server 8765
 
 ### Installing the verification tools — ask first
 
-Don't assume `lightpanda` or Playwright exists on the machine. **If the tools below are missing, ask the user before installing anything** (use the question/ask tool of whatever harness you're running; if none exists, just ask in your reply). Downloading a browser engine is not something to do silently on someone's machine. Check first:
+Don't assume `lightpanda` or Playwright exists on the machine. **If the tools below are missing, ask the user before installing anything** (use the question/ask tool of whatever harness you're running; if none exists, just ask in your reply). Downloading a tool (except for chromium) is not something to do silently on someone's machine. Check first:
 
 ```bash
 command -v lightpanda        # e.g. ~/.local/bin/lightpanda
+command -v playwright
 command -v python3
 ls ~/.cache/ms-playwright    # playwright browsers, if any
 ```
@@ -81,7 +82,10 @@ ls ~/.cache/ms-playwright    # playwright browsers, if any
   - **No graphical engine** — `--dump png` is a text-only rendering; `getComputedStyle` doesn't apply author CSS reliably. It checks structure and JS, not looks.
   - Its `click` only fires on "interactive" (button-like) elements — `.chat-item` is a `<div onclick>`, so dispatch with `page.evaluate("document.querySelector('.chat-item').click()")` or use Playwright.
   - `MutationObserver` callbacks race your next `waitForScript`/`click`; wait for the state itself, not for the injection call.
-- **Playwright Chromium** — how screenshots and real computed-style checks are done. Keep the tooling out of this repo (it has no package.json and must stay that way): work from a scratch dir like `/tmp`.
+- **Playwright Chromium** — how screenshots and real computed-style checks are done. Keep the tooling out of this repo (it has no package.json and must stay that way): work from a scratch dir like `/tmp`. 
+
+If Playwright is already installed globally (e.g. `npx playwright --version` / `playwright --version` (without `npx`) or a global `playwright`/`playwright-core` package exists), skip the setup below and use that install directly.
+If `playwright` is installed but `chromium` binary isn't, Don't ask the user whether you want to install chromium, just install it (technically not an actual tool, it gets deleted by `playwright` after a while).
 
   ```bash
   mkdir -p /tmp/ui-verify && cd /tmp/ui-verify
