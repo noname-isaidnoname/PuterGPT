@@ -284,7 +284,7 @@ const useAppStore = createStore((set, get) => ({
     autoScroll: true, // Default fallback
     tokenRotation: false, // Default fallback
     enableWebSearch: false, // Default fallback
-    theme: 'light' // Default fallback
+    theme: 'dark' // Default fallback
   },
   
   // Track original settings for comparison
@@ -294,7 +294,7 @@ const useAppStore = createStore((set, get) => ({
     autoScroll: true,
     tokenRotation: false,
     enableWebSearch: false,
-    theme: 'light'
+    theme: 'dark'
   },
   
   // Operation tracking

@@ -19,7 +19,7 @@ function stripLeadingEmoji(name) {
 }
 
 function currentTheme() {
-    return state?.config?.theme || 'light';
+    return state?.config?.theme || 'dark';
 }
 
 function makeCard(key, label, iconNode) {

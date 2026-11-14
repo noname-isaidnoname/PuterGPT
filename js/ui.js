@@ -242,7 +242,7 @@ window.openSettings = () => {
         autoScroll: els.autoScroll.checked,
         tokenRotation: els.tokenRotation.checked,
         enableWebSearch: els.enableWebSearch ? els.enableWebSearch.checked : false,
-        theme: state.config?.theme || 'light'
+        theme: state.config?.theme || 'dark'
     };
     setState({ originalSettings: currentSettings });
 };
@@ -316,7 +316,7 @@ window.saveSettings = async () => {
             autoScroll: configUpdates.autoScroll,
             enableWebSearch: configUpdates.enableWebSearch,
             tokenRotation: els.tokenRotation ? els.tokenRotation.checked : state.originalSettings.tokenRotation,
-            theme: state.config?.theme || 'light'
+            theme: state.config?.theme || 'dark'
         }
     }));
 
@@ -389,16 +389,16 @@ window.confirmDeleteTheme = async () => {
         await db.settings.put({ key: 'customThemes', value: savedThemes.value });
     }
     
-    // Reset to light theme
+    // Reset to the default (dark) theme
     const { setState } = await import('./store.js');
     setState((state) => ({
-        config: { ...state.config, theme: 'light' }
+        config: { ...state.config, theme: 'dark' }
     }));
-    await db.settings.put({ key: 'theme', value: 'light' });
-    
-    // Apply light theme
+    await db.settings.put({ key: 'theme', value: 'dark' });
+
+    // Apply dark theme
     const { applyTheme } = await import('./state.js');
-    applyTheme('light');
+    applyTheme('dark');
     
     // Re-render theme cards (the deleted theme must disappear)
     const { renderThemeCards } = await import('./theme-ui.js');

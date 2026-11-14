@@ -148,10 +148,10 @@ export function applyTheme(theme) {
     const root = document.documentElement;
 
     // Unknown theme (e.g. a saved custom theme that was deleted): fall back
-    // to light rather than leaving half of the old theme's variables applied.
-    const themeName = themeDefinitions[theme] ? theme : 'light';
+    // to dark rather than leaving half of the old theme's variables applied.
+    const themeName = themeDefinitions[theme] ? theme : 'dark';
     if (themeName !== theme) {
-        console.warn(`Theme "${theme}" not found; falling back to light`);
+        console.warn(`Theme "${theme}" not found; falling back to dark`);
     }
     const themeConfig = themeDefinitions[themeName];
 
@@ -205,7 +205,7 @@ export function applyTheme(theme) {
     appliedThemeName = themeName;
 }
 
-applyTheme('light');
+applyTheme('dark');
 
 // Async function to load settings from IndexedDB
 export async function loadSettingsFromDB() {
@@ -234,8 +234,8 @@ export async function loadSettingsFromDB() {
             }));
         }
         
-        // Always apply theme - use saved theme if exists, otherwise default to 'light'
-        const themeToApply = savedTheme ? savedTheme.value : 'light';
+        // Always apply theme - use saved theme if exists, otherwise default to 'dark'
+        const themeToApply = savedTheme ? savedTheme.value : 'dark';
         applyTheme(themeToApply);
 
         // Set original settings for comparison using the loaded values
@@ -246,14 +246,14 @@ export async function loadSettingsFromDB() {
                 autoScroll: savedScroll?.value !== undefined ? savedScroll.value : false,
                 tokenRotation: savedRotation?.value !== undefined ? savedRotation.value : false,
                 enableWebSearch: savedWebSearch?.value !== undefined ? savedWebSearch.value : false,
-                theme: savedTheme?.value || 'light'
+                theme: savedTheme?.value || 'dark'
             }
         });
     } catch (error) {
         console.error('Failed to load settings from DB:', error);
         
         // Apply default theme even when database loading fails
-        applyTheme('light');
+        applyTheme('dark');
         
         // Show user feedback for critical errors
         if (error.name === 'QuotaExceededError') {
@@ -319,7 +319,7 @@ export function hasSettingsChanged() {
     const currentAutoScroll = els.autoScroll.checked;
     const currentTokenRotation = els.tokenRotation.checked;
     const currentEnableWebSearch = els.enableWebSearch ? els.enableWebSearch.checked : false;
-    const currentTheme = getState().config?.theme || 'light';
+    const currentTheme = getState().config?.theme || 'dark';
     
     const currentState = getState();
     
