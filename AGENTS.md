@@ -117,6 +117,8 @@ If `playwright` is installed but `chromium` binary isn't, Don't ask the user whe
 - `preferences`-dependent JS (token order, rotation) lives in `localStorage` (`puter_tokens` etc.) only until the first migration to IndexedDB.
 - Global `input[type="text"]` / `.btn` rules in `ui-elements.css` outrank same-specificity component classes — a class like `.search-input` silently loses its `padding`. Override with element+class (`input.search-input`) or accept the global styling.
 - This repo is also deployed straight to websim.com (the footer script in `index.html` detects an iframe host) — don't break `window.location.ancestorOrigins` logic or the `id="puter-footer"` hook.
+- Do NOT read tools/.env file in any way, printing the contents will have it land in your conversation history and potentially expose sensitive information. Scripts can read the file but should never print it to stdout.
+- The tools/.env file contains `PUTER_TOKEN`, use this token to authenticate with the Puter API if needed.
 
 ## Commit conventions
 
