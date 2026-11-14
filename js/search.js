@@ -1,7 +1,9 @@
 import { state, els } from './state.js';
-import { getMessageText } from './utils.js';
+import { getMessageText, escapeHtml } from './utils.js';
 import { getSavedChats } from './storage.js';
 import { on } from './event-bus.js';
+
+export { escapeHtml };
 
 // Search Engine Core
 class SearchEngine {
@@ -32,10 +34,10 @@ class SearchEngine {
                         chatIndex.messageIndex.push({
                             messageId: messageIndex,
                             role: message.role,
-                            content: content.toLowerCase(),
+                            content: content,
                             originalContent: content,
                             timestamp: message.timestamp || chat.lastModified,
-                            hasImages: Array.isArray(message.content) && 
+                            hasImages: Array.isArray(message.content) &&
                                       message.content.some(item => item.type === 'image_url')
                         });
                     }
@@ -129,21 +131,27 @@ class SearchEngine {
         let score = 0;
 
         queryTerms.forEach(term => {
-            const regex = new RegExp(this.escapeRegex(term), 'gi');
-            let match;
-            while ((match = regex.exec(message.content)) !== null) {
+            // Case-insensitive literal scan — no RegExp, so no ReDoS risk
+            const haystack = message.content;
+            const needle = term.toLowerCase();
+            const lower = haystack.toLowerCase();
+            let idx = 0;
+            while (idx <= lower.length - needle.length) {
+                const found = lower.indexOf(needle, idx);
+                if (found === -1) break;
                 matches.push({
                     term: term,
-                    start: match.index,
-                    end: match.index + term.length,
-                    context: this.getContext(message.content, match.index, term.length)
+                    start: found,
+                    end: found + term.length,
+                    context: this.getContext(haystack, found, term.length)
                 });
                 score += 1; // Base score for match
-                
+
                 // Bonus for exact word matches
-                if (this.isWordBoundary(message.content, match.index, term.length)) {
+                if (this.isWordBoundary(haystack, found, term.length)) {
                     score += 2;
                 }
+                idx = found + term.length;
             }
         });
 
@@ -162,11 +170,6 @@ class SearchEngine {
         const before = start === 0 || /\W/.test(content[start - 1]);
         const after = start + length >= content.length || /\W/.test(content[start + length]);
         return before && after;
-    }
-
-    // Escape regex special characters
-    escapeRegex(string) {
-        return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     }
 
     // Check if chat passes filters
@@ -193,14 +196,13 @@ class SearchEngine {
         const results = [];
 
         state.messages.forEach((message, idx) => {
-            const content = getMessageText(message).toLowerCase();
+            const content = getMessageText(message);
             const matchData = this.searchInMessage({
                 content: content,
-                originalContent: getMessageText(message),
                 messageId: idx,
                 role: message.role,
                 timestamp: message.timestamp || Date.now(),
-                hasImages: Array.isArray(message.content) && 
+                hasImages: Array.isArray(message.content) &&
                           message.content.some(item => item.type === 'image_url')
             }, queryTerms);
 
@@ -219,51 +221,9 @@ class SearchEngine {
         return results.sort((a, b) => b.score - a.score);
     }
 
-    // Search across all chats
-    search(query, filters = {}) {
-        if (!this.searchIndex) {
-            throw new Error('Search index not built. Please rebuild the search index first.');
-        }
-
-        const queryTerms = query.toLowerCase().trim().split(/\s+/).filter(term => term.length > 0);
-        if (queryTerms.length === 0) return [];
-
-        const results = [];
-
-        for (const [chatId, chatIndex] of Object.entries(this.searchIndex)) {
-            // Apply filters
-            if (!this.passesFilters(chatIndex, filters)) continue;
-
-            const chatResults = {
-                chatId: chatId,
-                chatTitle: chatIndex.title,
-                lastModified: chatIndex.lastModified,
-                model: chatIndex.model,
-                matches: []
-            };
-
-            // Search through each message in the chat
-            chatIndex.messageIndex.forEach(message => {
-                const matchData = this.searchInMessage(message, queryTerms);
-                if (matchData.matches.length > 0) {
-                    chatResults.matches.push({
-                        role: message.role,
-                        content: message.originalContent,
-                        matches: matchData.matches,
-                        timestamp: message.timestamp,
-                        hasImages: message.hasImages
-                    });
-                }
-            });
-
-            // Only include chats that have matches
-            if (chatResults.matches.length > 0) {
-                results.push(chatResults);
-            }
-        }
-
-        return results;
-    }
+    // NOTE: the cross-chat `search()` above is the single implementation —
+    // a second lazy definition used to shadow it and throw when the index
+    // hadn't been built yet.
 
     // Get unique models from all chats
     async getAvailableModels() {
@@ -316,43 +276,35 @@ on('search:rebuild', () => {
     );
 });
 
-// Utility functions
-export function escapeHtml(text) {
-    const tempDiv = document.createElement('div');
-    tempDiv.textContent = text;
-    const escapedHtml = tempDiv.innerHTML;
-    tempDiv.remove();
-    return escapedHtml;
-}
+// Utility functions — escapeHtml is shared via utils.js and re-exported for
+// existing consumers.
 
+/**
+ * Wrap the (start, end) ranges in `matches` with <mark>. Indices refer to the
+ * ORIGINAL string; escaping is applied per-segment so lengths always line up.
+ */
 export function highlightText(text, matches) {
-    if (!matches || matches.length === 0) return escapeHtml(text);
+    const str = String(text ?? '');
+    const ranges = (matches || [])
+        .map(m => ({ start: Math.min(m.start, str.length), end: Math.min(m.end, str.length) }))
+        .filter(m => Number.isFinite(m.start) && Number.isFinite(m.end) && m.start < m.end)
+        .slice()
+        .sort((a, b) => a.start - b.start);
 
-    // First escape the text to prevent HTML injection
-    let highlightedText = escapeHtml(text);
-    const offsets = [];
+    if (ranges.length === 0) return escapeHtml(str);
 
-    // Calculate all highlight ranges
-    matches.forEach(match => {
-        offsets.push({
-            start: match.start,
-            end: match.end,
-            term: match.term
-        });
-    });
-
-    // Sort by start position
-    offsets.sort((a, b) => a.start - b.start);
-
-    // Apply highlights from end to start to avoid position shifts
-    offsets.reverse().forEach(offset => {
-        const before = highlightedText.substring(0, offset.start);
-        const match = highlightedText.substring(offset.start, offset.end);
-        const after = highlightedText.substring(offset.end);
-        highlightedText = before + `<mark class="search-highlight">${match}</mark>` + after;
-    });
-
-    return highlightedText;
+    let result = '';
+    let cursor = 0;
+    for (const { start, end } of ranges) {
+        if (start < cursor) continue; // skip overlapping ranges
+        result += escapeHtml(str.slice(cursor, start))
+               + '<mark class="search-highlight">'
+               + escapeHtml(str.slice(start, end))
+               + '</mark>';
+        cursor = end;
+    }
+    result += escapeHtml(str.slice(cursor));
+    return result;
 }
 
 export function formatDate(timestamp) {

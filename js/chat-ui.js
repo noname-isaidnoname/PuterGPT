@@ -1,9 +1,20 @@
 import { state, els } from './state.js';
-import { generateUniqueId, getMessageText } from './utils.js';
+import { generateUniqueId, getMessageText, escapeHtml } from './utils.js';
+import { sanitizeHtml } from './sanitize.js';
 import { emit, on } from './event-bus.js';
 
 // getMessageText is re-exported from utils for backward compatibility
 export { getMessageText };
+
+// Reject image URLs that aren't safe to embed (data:, blob:, http(s): only)
+function isSafeImageUrl(url) {
+    if (typeof url !== 'string') return false;
+    const trimmed = url.trim();
+    return /^data:image\/(png|gif|jpe?g|webp|bmp|ico|avif);/i.test(trimmed)
+        || /^https:\/\//i.test(trimmed)
+        || /^http:\/\//i.test(trimmed)
+        || /^blob:/i.test(trimmed);
+}
 
 // Copy Button Logic
 export function decorateCodeBlocks(root) {
@@ -99,18 +110,21 @@ export function renderMessage(index, message, isTyping = false) {
     if (isTyping) {
         innerContent = `<div class="typing-indicator"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>`;
     } else {
-        // Handle images in content
+        // Handle images in content. Only allow image-safe origins; anything
+        // else (e.g. javascript: URLs smuggled into an imported chat) is dropped.
         if (message.images && message.images.length > 0) {
-            const imageHtml = message.images.map(imgUrl => 
-                `<img src="${imgUrl}" style="max-width: 300px; max-height: 300px; border-radius: 8px; margin: 4px;" alt="Attached image">`
-            ).join('');
+            const imageHtml = message.images
+                .filter(isSafeImageUrl)
+                .map(imgUrl =>
+                    `<img src="${escapeHtml(imgUrl)}" style="max-width: 300px; max-height: 300px; border-radius: 8px; margin: 4px;" alt="Attached image">`
+                ).join('');
             innerContent += imageHtml;
         }
-        
+
         // Handle text content
         const textContent = getMessageText(message);
         if (textContent.trim()) {
-            innerContent += marked.parse(textContent);
+            innerContent += sanitizeHtml(marked.parse(textContent));
         }
     }
 
@@ -122,7 +136,7 @@ export function renderMessage(index, message, isTyping = false) {
                     <span>Thinking Process</span>
                     <span class="material-icons-outlined" style="font-size:16px">expand_more</span>
                 </div>
-                <div class="reasoning-content">${message.reasoning}</div>
+                <div class="reasoning-content">${escapeHtml(message.reasoning)}</div>
             </div>
         `;
     }
@@ -133,12 +147,13 @@ export function renderMessage(index, message, isTyping = false) {
             ? 'Free' 
             : `${message.cost.inputTokens} input, ${message.cost.outputTokens} output tokens`;
             
+        const costText = message.cost.formatted === 'Free' ? 'Free' : `~${message.cost.formatted}`;
         costHTML = `
             <div class="message-cost">
                 <span>
                     ${costDetails}
                 </span>
-                <span style="font-weight: 600; color: var(--text-primary); margin-left: 6px;">~${message.cost.formatted}</span>
+                <span style="font-weight: 600; color: var(--text-primary); margin-left: 6px;">${costText}</span>
             </div>
         `;
     }

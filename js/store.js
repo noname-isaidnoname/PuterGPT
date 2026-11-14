@@ -300,6 +300,9 @@ const useAppStore = createStore((set, get) => ({
   // Operation tracking
   lastOperationId: null,
   abortController: null,
+  // Single source of truth for "an AI response is being generated" —
+  // drives the send/stop button and blocks concurrent requests.
+  isGenerating: false,
   
   // Actions for updating state
   setMessages: (messages) => set({ messages }),

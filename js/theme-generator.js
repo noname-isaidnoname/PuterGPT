@@ -18,28 +18,40 @@ window.closeThemeGenerator = () => {
 };
 
 window.refreshThemeModels = async () => {
-    await loadThemeModels();
+    try {
+        const { populateSelectWithModels, populateModelSelect, loadModels } = await import('./models.js');
+        const { db } = await import('./indexeddb-storage.js');
+        const { setState } = await import('./store.js');
+
+        // Force a real refetch, like the main Refresh button
+        setState({ models: [] });
+        await db.settings.delete('cached_models');
+        await loadModels();
+
+        populateSelectWithModels(els.themeModelSelect, state.models);
+        populateModelSelect(state.models);
+        emit('toast:show', 'Models refreshed', 'success');
+    } catch (error) {
+        console.error('Failed to refresh theme models:', error);
+        emit('toast:show', 'Failed to refresh models', 'error');
+    }
 };
 
-// Load models for theme generation
+// Load models for theme generation — uses the already-loaded model list,
+// only hitting the network when we have nothing (previously this deleted the
+// shared model cache every time the generator opened).
 async function loadThemeModels() {
     try {
-        // Use the same populateModelSelect function that works for the main model dropdown
-        const { populateModelSelect } = await import('./models.js');
-        
-        // Clear cached models to force API call
-        const { db } = await import('./indexeddb-storage.js');
-        await db.settings.delete('cached_models');
-        
-        // Load fresh models from API
-        const { loadModels } = await import('./models.js');
-        await loadModels();
-        
-        // Use the same populate function but target theme dropdown
-        const models = state.models;
-        const { populateSelectWithModels } = await import('./models.js');
-        populateSelectWithModels(els.themeModelSelect, models);
+        const { populateSelectWithModels, populateModelSelect, loadModels } = await import('./models.js');
 
+        if (state.models.length === 0) {
+            await loadModels();
+        }
+
+        populateSelectWithModels(els.themeModelSelect, state.models);
+
+        // Keep the main dropdown in sync in case loadModels() was needed
+        populateModelSelect(state.models);
     } catch (error) {
         console.error('Failed to load theme models:', error);
         emit('toast:show', 'Failed to load AI models for theme generation', 'error');
@@ -306,11 +318,12 @@ window.generateCustomTheme = async () => {
 
     if (!validateGenerationInputs(prompt, selectedModel)) return;
 
-    const generateBtn = event.target;
-    const originalText = generateBtn.innerHTML;
+    // Use the button by id — event.target may be the inner icon <span>, not the button.
+    const generateBtn = document.getElementById('generate-theme-btn');
+    const originalText = generateBtn ? generateBtn.innerHTML : '';
 
     try {
-        setGenerateButtonBusy(generateBtn);
+        if (generateBtn) setGenerateButtonBusy(generateBtn);
         const cssContents = await loadCssContentsForContext();
         const theme = await requestThemeFromModel({ prompt, selectedModel, generateJS, cssContents });
         const themeId = persistCustomTheme(theme);
@@ -319,7 +332,7 @@ window.generateCustomTheme = async () => {
         console.error('Theme generation failed:', error);
         emit('toast:show', `Failed to generate theme: ${error.message}`, 'error');
     } finally {
-        restoreGenerateButton(generateBtn, originalText);
+        if (generateBtn) restoreGenerateButton(generateBtn, originalText);
     }
 };
 
@@ -366,7 +379,7 @@ async function tryLoadFromCache(db, cssContents) {
     if (cached && cached.value) {
         const { data, timestamp } = cached.value;
         if (Date.now() - timestamp < CSS_CACHE_DURATION) {
-            Object.assign(cssContents, data);
+            copyCachedCssFiles(cssContents, data);
             console.log('Loaded CSS contents from IndexedDB cache');
         }
     }
@@ -428,11 +441,22 @@ async function fallbackToCache(cssContents) {
         const { db } = await import('./indexeddb-storage.js');
         const cached = await db.settings.get(CSS_CACHE_KEY);
         if (cached?.value?.data) {
-            Object.assign(cssContents, cached.value.data);
+            copyCachedCssFiles(cssContents, cached.value.data);
             console.log('Using IndexedDB cached CSS contents as fallback');
         }
     } catch (cacheError) {
         console.error('IndexedDB cache fallback also failed:', cacheError);
+    }
+}
+
+// Copy only the known CSS files from the cached object — the cache is
+// trusted, but filtering keeps prototype-polluting keys (__proto__ etc.)
+// from ever entering the context object.
+function copyCachedCssFiles(cssContents, data) {
+    for (const fileName of CSS_FILES_TO_FETCH) {
+        if (data && typeof data[fileName] === 'string') {
+            cssContents[fileName] = data[fileName];
+        }
     }
 }
 

@@ -104,7 +104,9 @@
     display: flex;
     flex-direction: column;
     align-items: flex-end;
-    max-width: 100%;
+    /* Definite width, otherwise the .user-bubble percentage max-width below
+       creates a shrink-to-fit cycle and collapses the bubble to a sliver. */
+    width: 100%;
 }
 
 /* Message footer: hover-revealed action row */

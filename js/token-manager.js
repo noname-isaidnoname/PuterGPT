@@ -1,5 +1,6 @@
 import { db } from './indexeddb-storage.js';
 import { generateUniqueId } from './utils.js';
+import { emit } from './event-bus.js';
 
 // Token Management System with Rotation
 class TokenManager {
@@ -27,7 +28,7 @@ class TokenManager {
             this.rotationEnabled = rotationSetting ? rotationSetting.value : false;
         } catch (error) {
             console.error('Failed to initialize token manager:', error);
-            showToast('Failed to initialize token management. Some features may not work.', 'error');
+            emit('toast:show', 'Failed to initialize token management. Some features may not work.', 'error');
             // Ensure we have a working state even if initialization fails
             this.tokens = [];
             this.rotationEnabled = false;
@@ -44,9 +45,9 @@ class TokenManager {
             
             // Show user feedback for critical errors
             if (error.name === 'QuotaExceededError') {
-                showToast('Storage quota exceeded. Unable to load tokens.', 'error');
+                emit('toast:show', 'Storage quota exceeded. Unable to load tokens.', 'error');
             } else if (error.name === 'InvalidStateError') {
-                showToast('Database error. Please refresh the page.', 'error');
+                emit('toast:show', 'Database error. Please refresh the page.', 'error');
             }
             
             return [];
@@ -62,7 +63,7 @@ class TokenManager {
             this.tokens = await db.tokens.toArray();
         } catch (error) {
             console.error('Failed to save tokens:', error);
-            showToast('Failed to save token data.', 'error');
+            emit('toast:show', 'Failed to save token data.', 'error');
         }
     }
 
@@ -154,12 +155,24 @@ class TokenManager {
     async getCurrentToken() {
         await this.initialized;
         if (this.tokens.length === 0) return null;
-        
+
         if (this.rotationEnabled) {
-            return this.rotateToken();
+            return await this.rotateToken();
         }
-        
-        return this.tokens[this.currentIndex] || null;
+
+        // No rotation: honor the user's explicit choice, but never hand out
+        // a token the user disabled. Rotation is the opt-in mechanism for
+        // skipping broken tokens automatically; with rotation off we surface
+        // the failure as an API error instead of hiding the token.
+        const usable = (t) => t && !t.disabled;
+        const selected = this.tokens[this.currentIndex];
+        if (usable(selected)) return selected;
+        const fallback = this.tokens.find(usable);
+        if (fallback) {
+            this.currentIndex = this.tokens.indexOf(fallback);
+            return fallback;
+        }
+        return null;
     }
 
     // Get token by ID
@@ -178,7 +191,7 @@ class TokenManager {
     }
 
     // Token rotation logic
-    rotateToken() {
+    async rotateToken() {
         if (this.tokens.length === 0) return null;
         
         // Filter out disabled tokens
@@ -191,8 +204,8 @@ class TokenManager {
         while (attempts < maxAttempts) {
             const token = this.tokens[this.currentIndex];
             
-            // Skip disabled, failed, or unhealthy tokens
-            if (token && !token.disabled && !this.failedTokens.has(token.value || token.token) && token.isHealthy) {
+            // Skip disabled, failed, or unhealthy tokens (missing isHealthy = healthy)
+            if (token && !token.disabled && !this.failedTokens.has(token.value || token.token) && token.isHealthy !== false) {
                 return token;
             }
             
@@ -203,11 +216,12 @@ class TokenManager {
         
         // All tokens failed, reset and try again (but still skip disabled ones)
         this.failedTokens.clear();
-        // Reset health in DB
-        this.tokens.forEach(async t => {
+        // Reset health in DB (awaited so a token isn't picked up as unhealthy
+        // by a concurrent getCurrentToken right after the reset)
+        await Promise.all(this.tokens.map(async t => {
             t.isHealthy = true;
             await db.tokens.put(t);
-        });
+        }));
         
         // Find first available non-disabled token
         const availableToken = this.tokens.find(t => !t.disabled);
@@ -267,7 +281,7 @@ class TokenManager {
         const tokens = await this.loadTokens();
         return {
             total: tokens.length,
-            healthy: tokens.filter(t => t.isHealthy).length,
+            healthy: tokens.filter(t => t.isHealthy !== false).length,
             failed: this.failedTokens.size,
             rotationEnabled: this.rotationEnabled
         };

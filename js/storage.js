@@ -3,6 +3,7 @@ import { getMessageText } from './utils.js';
 import { emit, on } from './event-bus.js';
 import { db } from './indexeddb-storage.js';
 import { setState, subscribe } from './store.js';
+import { abortAssistantResponse } from './chat-api.js';
 
 // Set up reactive subscription to update chat list when current chat changes
 subscribe((newState, prevState) => {
@@ -95,9 +96,13 @@ export async function loadSavedChats() {
 window.loadChat = async function(id) {
     const chat = await db.chats.get(id);
     if (chat) {
+        // Stop any in-flight generation so the old stream can't write its
+        // result into the chat being loaded.
+        abortAssistantResponse();
         setState({
             currentChatId: chat.id,
-            messages: chat.messages
+            messages: chat.messages,
+            attachedImages: []
         });
         emit('messages:rerender');
         await loadSavedChats();
@@ -136,11 +141,13 @@ on('chats:refresh-needed', () => {
 });
 
 on('chat:new-requested', () => {
+    // Stop any in-flight generation before resetting the conversation.
+    abortAssistantResponse();
     // Reset state and refresh list, then close sidebar on mobile.
     setState({
         messages: [],
         currentChatId: null,
-        lastOperationId: Date.now()
+        attachedImages: []
     });
     els.chatContainer.innerHTML = '';
     loadSavedChats();

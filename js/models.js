@@ -353,11 +353,22 @@ function formatCostDisplay(costInfo) {
     return `${inputCost}/1M input, ${outputCost}/1M output`;
 }
 
+// Fill (or hide) the cost display — never leave a blank bordered box behind.
 export function updateCostDisplay() {
+    if (!els.modelCostDisplay) return;
+
     const currentModel = state.models.find(m => m.id === state.config.modelId);
-    
-    if (els.modelCostDisplay && currentModel) {
+    if (currentModel) {
         els.modelCostDisplay.textContent = formatCostDisplay(currentModel.costInfo);
+        els.modelCostDisplay.style.display = '';
+    } else if (state.models.length > 0) {
+        // Model list is loaded but the saved model isn't in it
+        els.modelCostDisplay.textContent = 'Cost information not available, Try refreshing models!';
+        els.modelCostDisplay.style.display = '';
+    } else {
+        // Models haven't loaded yet — don't flash a confusing empty box
+        els.modelCostDisplay.textContent = '';
+        els.modelCostDisplay.style.display = 'none';
     }
 }
 

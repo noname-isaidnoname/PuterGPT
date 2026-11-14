@@ -125,6 +125,44 @@ class SearchUI {
 
     // Setup event listeners
     setupEventListeners() {
+        // Results actions (toggle expansion / open chat / clear) — single
+        // delegated listener, ids travel via data-* attributes.
+        const resultsRoot = document.getElementById('search-results-content');
+        resultsRoot.addEventListener('click', (e) => {
+            const actionEl = e.target.closest('[data-action]');
+            if (!actionEl || !resultsRoot.contains(actionEl)) return;
+            const { action, chatId } = actionEl.dataset;
+            switch (action) {
+                case 'toggle':
+                    e.stopPropagation();
+                    this.toggleResultExpansion(chatId);
+                    break;
+                case 'open':
+                    e.stopPropagation();
+                    this.loadChatResult(chatId);
+                    break;
+                case 'clear':
+                    this.clearResults();
+                    break;
+            }
+        });
+
+        // Current chat search results (jump to message)
+        const currentResults = document.getElementById('current-chat-search-results');
+        currentResults.addEventListener('click', (e) => {
+            const target = e.target.closest('[data-action="jump"][data-message-id]');
+            if (!target) return;
+            this.jumpToMessage(Number(target.dataset.messageId));
+        });
+
+        // Search history (fill & search)
+        const historyContainer = document.getElementById('search-history');
+        historyContainer.addEventListener('click', (e) => {
+            const item = e.target.closest('[data-query]');
+            if (!item) return;
+            this.searchFromHistory(item.dataset.query);
+        });
+
         // Search modal events
         const searchInput = document.getElementById('search-input');
         const searchBtn = document.getElementById('search-btn');
@@ -305,7 +343,7 @@ class SearchUI {
         // Perform search with slight delay for better UX
         setTimeout(async () => {
             try {
-                const results = searchEngine.search(query, this.currentFilters);
+                const results = await searchEngine.search(query, this.currentFilters);
                 this.displayResults(results);
             } catch (error) {
                 console.error('Search error:', error);
@@ -339,7 +377,7 @@ class SearchUI {
         }
         
         resultsContainer.innerHTML = results.map(result => `
-            <div class="current-chat-search-result" onclick="searchUI.jumpToMessage(${result.messageId})">
+            <div class="current-chat-search-result" data-action="jump" data-message-id="${Number(result.messageId) || 0}">
                 <div style="font-weight: 600; margin-bottom: 4px; font-size: 0.7rem; text-transform: uppercase;">
                     ${escapeHtml(result.role)}
                 </div>
@@ -350,18 +388,21 @@ class SearchUI {
 
     // Jump to specific message
     jumpToMessage(messageId) {
-        // Scroll to message
+        const index = Number(messageId);
+        if (!Number.isFinite(index)) return;
+        // Scroll to message (note: rendered list skips empty assistant bubbles,
+        // so indices may drift slightly from state.messages — good enough for UX)
         const messages = document.querySelectorAll('.message');
-        if (messages[messageId]) {
-            messages[messageId].scrollIntoView({ behavior: 'smooth', block: 'center' });
-            
+        if (messages[index]) {
+            messages[index].scrollIntoView({ behavior: 'smooth', block: 'center' });
+
             // Highlight temporarily
-            messages[messageId].style.backgroundColor = 'var(--primary-color)';
+            messages[index].style.backgroundColor = 'var(--accent-soft)';
             setTimeout(() => {
-                messages[messageId].style.backgroundColor = '';
+                messages[index].style.backgroundColor = '';
             }, 2000);
         }
-        
+
         // Close current chat search
         this.closeCurrentChatSearch();
     }
@@ -401,7 +442,7 @@ class SearchUI {
                     Found ${results.length} conversation${results.length !== 1 ? 's' : ''} with matches
                 </div>
                 <div class="search-results-actions">
-                    <button class="clear-results-btn" onclick="searchUI.clearResults()">Clear</button>
+                    <button class="clear-results-btn" data-action="clear">Clear</button>
                 </div>
             </div>
             ${results.map((result, index) => this.createResultHTML(result, index)).join('')}
@@ -412,10 +453,11 @@ class SearchUI {
     createResultHTML(result, index) {
         const isExpanded = this.expandedResults.has(result.chatId);
         const totalMatches = result.matches.reduce((sum, match) => sum + match.matches.length, 0);
-        
+        const safeChatId = escapeHtml(result.chatId);
+
         return `
-            <div class="search-result-item ${isExpanded ? 'expanded' : ''}" data-chat-id="${result.chatId}">
-                <div class="search-result-header" onclick="searchUI.toggleResultExpansion('${result.chatId}')">
+            <div class="search-result-item ${isExpanded ? 'expanded' : ''}" data-chat-id="${safeChatId}">
+                <div class="search-result-header" data-action="toggle" data-chat-id="${safeChatId}">
                     <div>
                         <div class="search-result-title">${escapeHtml(result.chatTitle)}</div>
                         <div class="search-result-meta">
@@ -425,13 +467,13 @@ class SearchUI {
                             </div>
                             <div class="search-result-meta-item">
                                 <span class="material-icons-outlined">smart_toy</span>
-                                ${escapeHtml(result.model.split(':')[1] || result.model)}
+                                ${escapeHtml(String(result.model || '').split(':')[1] || result.model)}
                             </div>
                         </div>
                     </div>
                     <div style="display: flex; align-items: center; gap: 10px;">
                         <div class="search-match-count">${totalMatches} match${totalMatches !== 1 ? 'es' : ''}</div>
-                        <button class="btn" style="padding: 4px 8px; font-size: 0.8rem;" onclick="event.stopPropagation(); searchUI.loadChatResult('${result.chatId}')">
+                        <button class="btn" style="padding: 4px 8px; font-size: 0.8rem;" data-action="open" data-chat-id="${safeChatId}">
                             Open
                         </button>
                     </div>
@@ -448,7 +490,7 @@ class SearchUI {
         return `
             <div class="search-match">
                 <div class="search-match-header">
-                    <div class="search-match-role">${match.role}</div>
+                    <div class="search-match-role">${escapeHtml(String(match.role || ''))}</div>
                     <div class="search-match-time">${formatDate(match.timestamp)}</div>
                 </div>
                 <div class="search-match-content">
@@ -466,9 +508,12 @@ class SearchUI {
         } else {
             this.expandedResults.add(chatId);
         }
-        
-        const resultItem = document.querySelector(`[data-chat-id="${chatId}"]`);
-        resultItem.classList.toggle('expanded');
+
+        document.querySelectorAll('.search-result-item').forEach(item => {
+            if (item.dataset.chatId === chatId) {
+                item.classList.toggle('expanded');
+            }
+        });
     }
 
     // Load chat from search result
@@ -495,7 +540,7 @@ class SearchUI {
             <div class="no-results">
                 <span class="material-icons-outlined">error</span>
                 <h4>Search Error</h4>
-                <p>${message}</p>
+                <p>${escapeHtml(message)}</p>
             </div>
         `;
     }
@@ -525,11 +570,15 @@ class SearchUI {
             return;
         }
         
-        historyContainer.innerHTML = history.map(query => {
-            const escapedQuery = escapeHtml(query);
-            const jsEscapedQuery = escapedQuery.replace(/'/g, "\\'");
-            return `<div class="search-history-item" onclick="searchUI.searchFromHistory('${jsEscapedQuery}')">${escapedQuery}</div>`;
-        }).join('');
+        historyContainer.innerHTML = '';
+        history.forEach(query => {
+            const item = document.createElement('div');
+            item.className = 'search-history-item';
+            // textContent, not HTML — the query is untrusted text
+            item.textContent = query;
+            item.dataset.query = query;
+            historyContainer.appendChild(item);
+        });
     }
 
     // Search from history

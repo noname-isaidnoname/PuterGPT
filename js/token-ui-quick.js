@@ -4,35 +4,28 @@ import { renderTokenList, flashNewToken } from './token-ui-list.js';
 import { showToast } from './ui.js';
 
 export async function quickRegisterToken() {
+    const btn = document.getElementById('quick-register-btn');
     try {
-        const btn = document.querySelector('[onclick*="quickRegisterToken"]');
         if (btn) {
-            const originalText = btn.textContent;
-            btn.textContent = 'Registering...';
+            var originalContent = btn.innerHTML;
+            btn.innerHTML = '<span class="material-icons-outlined" style="font-size:14px">hourglass_empty</span> Registering...';
             btn.disabled = true;
-            
-            const newToken = await tokenManager.quickRegisterToken();
-            renderTokenList();
-            showToast(`Token "${newToken.name}" added successfully!`, 'success');
-            flashNewToken(newToken.id);
-
-            // Restore button text
-            btn.textContent = originalText;
-            btn.disabled = false;
-        } else {
-            // No button found, still perform quick register
-            const newToken = await tokenManager.quickRegisterToken();
-            renderTokenList();
-            showToast(`Token "${newToken.name}" added successfully!`, 'success');
         }
-        
+
+        const newToken = await tokenManager.quickRegisterToken();
+        renderTokenList();
+        showToast(`Token "${newToken.name}" added successfully!`, 'success');
+        flashNewToken(newToken.id);
+
+        if (btn) {
+            btn.innerHTML = originalContent;
+            btn.disabled = false;
+        }
     } catch (error) {
         showToast(error.message, 'error');
-        
-        const btn = document.querySelector('[onclick*="quickRegisterToken"]');
         if (btn) {
-            btn.textContent = 'Quick Register (via Puter)';
+            btn.innerHTML = originalContent || btn.innerHTML;
             btn.disabled = false;
         }
     }
-}
+}

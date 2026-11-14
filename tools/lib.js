@@ -469,4 +469,4 @@ async function openSettings(page) {
     await sleep(400); // let the open transition finish
 }
 
-module.exports = { REPO_ROOT, run, waitForBoot, openSettings, sleep };
+module.exports = { REPO_ROOT, run, waitForBoot, openSettings, sleep, startStaticServer, loadPlaywright, launchBrowser };

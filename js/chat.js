@@ -2,7 +2,6 @@ import { state, els } from './state.js';
 import { generateUniqueId } from './utils.js';
 import { showChatContextMenu } from './ui.js';
 import { tokenManager } from './token-manager.js';
-import { reRenderAllMessages } from './chat-ui.js';
 import { abortAssistantResponse } from './chat-api.js';
 import { setState } from './store.js';
 import { emit, on } from './event-bus.js';
@@ -17,6 +16,9 @@ export function resizeInput() {
 }
 
 export function handleInputKey(e) {
+    // Don't send while the user is composing with an IME — Enter there
+    // confirms the candidate, it doesn't submit the message.
+    if (e.isComposing || e.keyCode === 229) return;
     if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         sendMessage();
@@ -28,7 +30,7 @@ export async function sendMessage() {
     if (!text && state.attachedImages.length === 0) return;
 
     // Check if assistant response is already in progress - if so, abort it
-    if (state.lastOperationId && state.messages.some(m => m.role === 'assistant' && m.content === '')) {
+    if (state.isGenerating) {
         abortAssistantResponse();
         return;
     }
@@ -58,16 +60,6 @@ export async function sendMessage() {
     
     // Clear attached images after processing
     setState({ attachedImages: [] });
-    // Image preview will update automatically via subscription
-}
-
-function newChat() {
-    setState({
-        currentChatId: null,
-        messages: [],
-        attachedImages: []
-    });
-    reRenderAllMessages();
     // Image preview will update automatically via subscription
 }
 

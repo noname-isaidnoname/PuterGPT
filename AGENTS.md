@@ -42,6 +42,10 @@ Custom properties are the whole theme system (built-ins `light` = default, `dark
 
 `state` is a **Proxy** delegating to `getState()` — always read `state.x` fresh; never cache the proxy itself. For UI updates, `subscribe(syncConfigToUI)` in `app.js` syncs config → DOM; messages flow through `emit('message:append')` / `emit('messages:rerender')`. `reRenderAllMessages()` clears and rebuilds `#chat-container`; a MutationObserver in `initializeWelcomeMode()` watches the container and toggles `#main.welcome-mode`, which shows the centered `#welcome-view` and hides the transcript.
 
+**AI generation is an explicit state machine** — never go back to inferring it from the messages array. `triggerAssistantResponse()` sets `state.isGenerating: true` synchronously; `streamPuterCompletion`'s callbacks and every failure path settle it back to `false` (with `lastOperationId`/`abortController`); `abortAssistantResponse()` is the one entry point that finalizes synchronously by reaching the in-flight stream context (`activeStream` in `js/chat-api.js`). Anything that swaps the transcript (`newChat`, `loadChat`, import/shared-chat load, delete-active-chat, regenerate) must call `abortAssistantResponse()` first. Empty assistant placeholders are only ever valid mid-flight.
+
+**Untrusted HTML never reaches `innerHTML` raw.** `marked.parse(...)` output must go through `sanitizeHtml()` (`js/sanitize.js`, allowlist-based — strips scripts, event handlers, non-image `data:` URLs, forms/iframes). Reasoning text is escaped, not interpolated. Same rule applies to imported/shared chats and token names.
+
 ## Message markup contract (easy to break)
 
 - `renderMessage()` output: `<div class="message user|assistant"><div class="message-wrapper"><div class="message-content">…</div><div class="msg-footer">…edit button…</div></div></div>`
@@ -57,7 +61,7 @@ Custom properties are the whole theme system (built-ins `light` = default, `dark
 python3 -m http.server 8765
 ```
 
-Headless harnesses live in `tools/` (see `tools/README.md`) — they serve the repo statically themselves, so no manual server is needed. They run on Lightpanda (raw CDP, no dependencies, default) or Playwright (`--backend playwright`; needed for screenshots and mobile viewport emulation), and exit non-zero on console/page errors, which is the fastest way to run the checks below.
+Headless harnesses live in `tools/` (see `tools/README.md`) — they serve the repo statically themselves, so no manual server is needed. They run on Lightpanda (raw CDP, no dependencies, default) or Playwright (`--backend playwright`; needed for screenshots and mobile viewport emulation), and exit non-zero on console/page errors, which is the fastest way to run the checks below. `tools/verify-edge-cases.js` is Playwright-only (it mocks the Puter API via route interception) and covers the generation/abort/error paths, XSS sanitization and the settings discard-tracking flow. `node tools/verify-all.js` (or `--backend all`) runs the whole suite in parallel.
 
 ### Installing the verification tools — ask first
 

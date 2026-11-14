@@ -10,17 +10,19 @@ export function showTokenGuide() {
             <div class="modal token-guide-modal">
                 <h3>Token Guide</h3>
                 <div class="token-guide-content">
-                    <pre style="white-space: pre-wrap; font-size:0.9rem; line-height:1.4;">${TOKEN_GUIDE}</pre>
+                    <pre id="token-guide-pre" style="white-space: pre-wrap; font-size:0.9rem; line-height:1.4;"></pre>
                 </div>
                 <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:20px;">
                     <button class="btn" id="guide-close-btn">Close</button>
                 </div>
             </div>
         `);
+        // Set via textContent — the guide is plain text and stays plain text.
+        modal.querySelector('#token-guide-pre').textContent = TOKEN_GUIDE;
         modal.querySelector('#guide-close-btn').addEventListener('click', () => modal.remove());
     } catch (error) {
         console.error('Error in showTokenGuide:', error);
-        alert('Error showing token guide: ' + error.message);
+        showToast('Error showing token guide: ' + error.message, 'error');
     }
 }
 
@@ -83,8 +85,7 @@ export async function exportTokens() {
                     downloadJsonFile(dataStr, `puter-tokens-${new Date().toISOString().split('T')[0]}.json`);
                     showToast(`Downloaded ${tokens.length} tokens`, 'success');
                 }
-                // Close the modal (last created)
-                document.querySelectorAll('.modal-overlay.active').forEach(m => m.remove());
+                // The confirmation modal closes itself on success.
             }
         });
     } catch (error) {

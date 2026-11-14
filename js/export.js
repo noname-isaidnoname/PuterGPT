@@ -4,6 +4,7 @@ import { db } from './indexeddb-storage.js';
 import { setState } from './store.js';
 import { downloadJsonFile } from './modal-helper.js';
 import { emit, on } from './event-bus.js';
+import { abortAssistantResponse } from './chat-api.js';
 
 // Wire up listeners for the context-menu actions emitted from ui.js
 on('chat:export-json', (chatId) => exportChatAsJson(chatId));
@@ -45,7 +46,7 @@ async function exportChatAsJson(chatId) {
         emit('toast:show', 'Chat exported successfully', 'success');
     } catch (error) {
         console.error('Failed to export chat:', error);
-        showToast('Failed to export chat');
+        emit('toast:show', 'Failed to export chat', 'error');
     }
 }
 
@@ -105,6 +106,8 @@ export function loadSharedChat() {
 
             if (sharedData && sharedData.messages) {
                 const newChatId = generateUniqueId();
+                // Stop any in-flight generation before swapping the transcript.
+                abortAssistantResponse();
 
                 const chatData = {
                     id: newChatId,
@@ -117,12 +120,14 @@ export function loadSharedChat() {
 
                 setState({
                     currentChatId: newChatId,
-                    messages: sharedData.messages
+                    messages: sharedData.messages,
+                    attachedImages: []
                 });
 
                 db.chats.put(chatData).then(() => {
                     emit('messages:rerender');
                     emit('chats:refresh-needed');
+                    emit('search:rebuild');
                     emit('toast:show', `Loaded and saved shared chat: ${chatData.title} (${sharedData.messages.length} messages)`, 'success');
                     window.history.replaceState(null, null, window.location.pathname);
                 });
@@ -152,6 +157,8 @@ export function importChatFromJson(jsonData) {
         // which prompts were used in the original conversation.
 
         const newChatId = generateUniqueId();
+        // Stop any in-flight generation before swapping the transcript.
+        abortAssistantResponse();
 
         const chatData = {
             id: newChatId,
@@ -167,12 +174,14 @@ export function importChatFromJson(jsonData) {
 
         setState({
             currentChatId: newChatId,
-            messages: jsonData.messages
+            messages: jsonData.messages,
+            attachedImages: []
         });
 
         db.chats.put(chatData).then(() => {
             emit('messages:rerender');
             emit('chats:refresh-needed');
+            emit('search:rebuild');
             const msgCount = jsonData.messageCount || jsonData.messages.length;
             emit('toast:show', `Imported and saved chat: ${chatData.title} (${msgCount} messages)`, 'success');
         });

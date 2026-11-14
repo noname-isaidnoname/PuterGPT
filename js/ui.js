@@ -2,6 +2,7 @@ import { els, state, hasSettingsChanged, resetSettingsToOriginal } from './state
 import { db } from './indexeddb-storage.js';
 import { setState, getState, subscribe, themeDefinitions } from './store.js';
 import { emit, on } from './event-bus.js';
+import { abortAssistantResponse } from './chat-api.js';
 
 // Set up reactive subscription to update image preview when attached images change
 subscribe((newState, prevState) => {
@@ -138,25 +139,40 @@ async function updateImagePreview() {
 let activeContextChatId = null;
 const contextMenu = document.getElementById('chat-context-menu');
 
+// Registered while the menu is open; removed whenever the menu closes.
+let contextMenuCloseListener = null;
+
+function hideContextMenu() {
+    contextMenu.classList.remove('active');
+    if (contextMenuCloseListener) {
+        document.removeEventListener('click', contextMenuCloseListener);
+        contextMenuCloseListener = null;
+    }
+}
+
 export function showChatContextMenu(e, chatId) {
     activeContextChatId = chatId;
+    hideContextMenu(); // ensure any stale outside-click listener is removed
     contextMenu.classList.add('active');
-    
+
     // Position menu
     const rect = e.currentTarget.getBoundingClientRect();
     contextMenu.style.top = `${rect.bottom + 5}px`;
-    contextMenu.style.left = `${rect.right - contextMenu.offsetWidth}px`;
-    
+    // Keep the menu on-screen even for narrow sidebars
+    const menuWidth = contextMenu.offsetWidth || 180;
+    contextMenu.style.left = `${Math.max(4, rect.right - menuWidth)}px`;
+
     // Close on click outside
     const closeMenu = (event) => {
         if (!contextMenu.contains(event.target)) {
-            contextMenu.classList.remove('active');
-            document.removeEventListener('click', closeMenu);
+            hideContextMenu();
         }
     };
-    
+    contextMenuCloseListener = closeMenu;
+
     setTimeout(() => document.addEventListener('click', closeMenu), 0);
 }
+
 window.showChatContextMenu = showChatContextMenu;
 
 window.handleRenameChat = async () => {
@@ -165,24 +181,24 @@ window.handleRenameChat = async () => {
     if (newTitle !== null) {
         emit('chat:rename', activeContextChatId, newTitle);
     }
-    contextMenu.classList.remove('active');
+    hideContextMenu();
 };
 
 window.handleDeleteChat = () => {
     if (confirm("Delete this chat?")) {
         window.deleteChat(activeContextChatId);
     }
-    contextMenu.classList.remove('active');
+    hideContextMenu();
 };
 
 window.handleExportChat = () => {
     emit('chat:export-json', activeContextChatId);
-    contextMenu.classList.remove('active');
+    hideContextMenu();
 };
 
 window.handleShareChat = () => {
     emit('chat:share', activeContextChatId);
-    contextMenu.classList.remove('active');
+    hideContextMenu();
 };
 
 window.importChat = () => {
@@ -191,10 +207,13 @@ window.importChat = () => {
 };
 
 window.newChat = () => {
+    // Stop any in-flight generation first so the old stream can't finalize
+    // into the fresh conversation.
+    abortAssistantResponse();
     setState({
         messages: [],
         currentChatId: null,
-        lastOperationId: Date.now()
+        attachedImages: []
     });
     els.chatContainer.innerHTML = '';
     emit('chats:refresh-needed');
@@ -282,12 +301,25 @@ window.saveSettings = async () => {
     setState((state) => ({
         config: { ...state.config, ...configUpdates }
     }));
-    
+
     await db.settings.put({ key: 'system_prompt', value: configUpdates.systemPrompt });
     await db.settings.put({ key: 'model', value: configUpdates.modelId });
     await db.settings.put({ key: 'auto_scroll', value: configUpdates.autoScroll });
     await db.settings.put({ key: 'enable_web_search', value: configUpdates.enableWebSearch });
-  
+
+    // Saved = new baseline. Otherwise "Discard Changes?" fires on the next
+    // close even though everything was persisted.
+    setState((state) => ({
+        originalSettings: {
+            systemPrompt: configUpdates.systemPrompt,
+            modelId: configUpdates.modelId,
+            autoScroll: configUpdates.autoScroll,
+            enableWebSearch: configUpdates.enableWebSearch,
+            tokenRotation: els.tokenRotation ? els.tokenRotation.checked : state.originalSettings.tokenRotation,
+            theme: state.config?.theme || 'light'
+        }
+    }));
+
     // Close both modals if confirmation is open
     els.settingsModal.classList.remove('active');
     els.settingsConfirmModal.classList.remove('active');

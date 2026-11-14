@@ -19,27 +19,34 @@ window.enterEditMode = function(index) {
 
     const editUI = document.createElement('div');
     editUI.className = 'edit-container';
-    
-    let buttonsHtml = `
-        <button class="btn danger" onclick="cancelEdit(${index})">Cancel</button>
-        <button class="btn primary" onclick="saveEdit(${index})">Save</button>
-    `;
-    
+
+    let buttonsHtml;
     if (message.role === 'user') {
-        buttonsHtml += `
+        buttonsHtml = `
+            <button class="btn danger" onclick="cancelEdit(${index})">Cancel</button>
+            <button class="btn primary" onclick="saveEdit(${index})">Save</button>
             <button class="btn primary" onclick="saveAndRegenerate(${index})">Save + Regenerate</button>
+        `;
+    } else {
+        buttonsHtml = `
+            <button class="btn danger" onclick="cancelEdit(${index})">Cancel</button>
+            <button class="btn primary" onclick="saveEdit(${index})">Save</button>
         `;
     }
 
-    editUI.innerHTML = `
-        <textarea class="edit-textarea" id="edit-textarea-${index}">${getMessageText(message)}</textarea>
-        <div class="edit-controls">
-            ${buttonsHtml}
-        </div>
-    `;
+    const textarea = document.createElement('textarea');
+    textarea.className = 'edit-textarea';
+    textarea.id = `edit-textarea-${index}`;
+    // Set via .value, never innerHTML — the message text is untrusted.
+    textarea.value = getMessageText(message);
+
+    editUI.appendChild(textarea);
+    const controls = document.createElement('div');
+    controls.className = 'edit-controls';
+    controls.innerHTML = buttonsHtml;
+    editUI.appendChild(controls);
 
     contentEl.appendChild(editUI);
-    const textarea = editUI.querySelector('textarea');
     textarea.focus();
     textarea.selectionStart = textarea.value.length;
 };
@@ -82,6 +89,10 @@ window.saveEdit = function(index) {
 window.saveAndRegenerate = async function(index) {
     const newContent = readEditTextarea(index);
     if (newContent === null) return;
+    // Stop any in-flight generation before truncating, so its finalize step
+    // can't resurrect messages that are about to be discarded.
+    const { abortAssistantResponse } = await import('./chat-api.js');
+    abortAssistantResponse();
     commitMessageEdit(index, newContent, { truncate: true });
 
     await import('./chat-api.js').then(m => m.triggerAssistantResponse());

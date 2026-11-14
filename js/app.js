@@ -89,12 +89,11 @@ function syncField(newState, prevState, key, apply) {
 }
 
 function updateSendButtonIcon(currentState) {
-    const isGenerating = currentState.lastOperationId &&
-        currentState.messages.some(m => m.role === 'assistant' && m.content === '');
     const sendBtnIcon = els.sendBtn.querySelector('.material-icons-outlined');
     if (sendBtnIcon) {
-        sendBtnIcon.textContent = isGenerating ? 'stop' : 'arrow_upward';
+        sendBtnIcon.textContent = currentState.isGenerating ? 'stop' : 'arrow_upward';
     }
+    els.sendBtn.title = currentState.isGenerating ? 'Stop generating' : 'Send message';
 }
 
 function restoreConfigUI() {
@@ -155,10 +154,7 @@ window.sendMessage = sendMessage;
 
 // Handle send button click - determines whether to send message or abort generation
 window.handleSendButtonClick = () => {
-    const isGenerating = state.lastOperationId && 
-                       state.messages.some(m => m.role === 'assistant' && m.content === '');
-    
-    if (isGenerating) {
+    if (state.isGenerating) {
         abortAssistantResponse();
     } else {
         sendMessage();

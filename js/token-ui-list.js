@@ -2,6 +2,7 @@
 import { tokenManager } from './token-manager.js';
 import { els } from './state.js';
 import { showToast } from './ui.js';
+import { escapeHtml } from './utils.js';
 
 /**
  * Briefly highlight a newly-added token in the list.
@@ -9,7 +10,7 @@ import { showToast } from './ui.js';
  */
 export function flashNewToken(id) {
     setTimeout(() => {
-        const el = document.querySelector(`[data-token-id="${id}"]`);
+        const el = document.querySelector(`[data-token-id="${CSS.escape(id)}"]`);
         if (el) {
             el.classList.add('new');
             setTimeout(() => el.classList.remove('new'), 300);
@@ -17,9 +18,29 @@ export function flashNewToken(id) {
     }, 100);
 }
 
+// Event delegation for the token list — no inline handlers, so token ids and
+// names can never break out into executable markup.
+let tokenListDelegationBound = false;
+function bindTokenListDelegation() {
+    if (tokenListDelegationBound || !els.tokenList) return;
+    tokenListDelegationBound = true;
+    els.tokenList.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-action][data-token-id]');
+        if (!btn || !els.tokenList.contains(btn)) return;
+        const id = btn.dataset.tokenId;
+        switch (btn.dataset.action) {
+            case 'toggle-disabled': toggleTokenDisabled(id); break;
+            case 'edit-name': editTokenName(id); break;
+            case 'set-active': setActiveToken(id); break;
+            case 'delete': deleteToken(id); break;
+        }
+    });
+}
+
 export async function renderTokenList() {
     if (!els.tokenList) return;
-    
+    bindTokenListDelegation();
+
     const tokens = await tokenManager.getAllTokens();
     const currentToken = await tokenManager.getCurrentToken();
     const stats = await tokenManager.getTokenStats();
@@ -59,28 +80,30 @@ export async function renderTokenList() {
         const statusClass = isDisabled ? 'disabled' : (isActive ? 'current' : (isHealthy ? 'healthy' : 'failed'));
         const statusText = isDisabled ? 'Disabled' : (isActive ? 'Current' : (isHealthy ? 'Healthy' : 'Failed'));
         
+        const safeId = escapeHtml(token.id);
+        const safeName = escapeHtml(token.name);
         return `
-            <div class="token-item ${isActive ? 'active' : ''} ${!isHealthy ? 'failed' : ''} ${isDisabled ? 'disabled' : ''}" data-token-id="${token.id}">
+            <div class="token-item ${isActive ? 'active' : ''} ${!isHealthy ? 'failed' : ''} ${isDisabled ? 'disabled' : ''}" data-token-id="${safeId}">
                 <div class="token-info">
                     <div class="token-name">
-                        <span>${token.name}</span>
+                        <span>${safeName}</span>
                         <span class="token-status ${statusClass}">${statusText}</span>
                     </div>
                     <div class="token-details">
-                        Used ${token.usageCount} times • Last used: ${lastUsed}
+                        Used ${Number(token.usageCount) || 0} times • Last used: ${escapeHtml(lastUsed)}
                     </div>
                 </div>
                 <div class="token-actions">
-                    <button class="token-action-btn ${isDisabled ? 'enable' : 'disable'}" onclick="toggleTokenDisabled('${token.id}')" title="${isDisabled ? 'Enable token' : 'Disable token'}">
+                    <button class="token-action-btn ${isDisabled ? 'enable' : 'disable'}" data-action="toggle-disabled" data-token-id="${safeId}" title="${isDisabled ? 'Enable token' : 'Disable token'}">
                         <span class="material-icons-outlined" style="font-size:16px">${isDisabled ? 'visibility_off' : 'visibility'}</span>
                     </button>
-                    <button class="token-action-btn edit" onclick="editTokenName('${token.id}')" title="Edit name">
+                    <button class="token-action-btn edit" data-action="edit-name" data-token-id="${safeId}" title="Edit name">
                         <span class="material-icons-outlined" style="font-size:16px">edit</span>
                     </button>
-                    <button class="token-action-btn" onclick="setActiveToken('${token.id}')" title="Set as active">
+                    <button class="token-action-btn" data-action="set-active" data-token-id="${safeId}" title="Set as active">
                         <span class="material-icons-outlined" style="font-size:16px">check_circle</span>
                     </button>
-                    <button class="token-action-btn delete" onclick="deleteToken('${token.id}')" title="Delete token">
+                    <button class="token-action-btn delete" data-action="delete" data-token-id="${safeId}" title="Delete token">
                         <span class="material-icons-outlined" style="font-size:16px">delete</span>
                     </button>
                 </div>
@@ -164,4 +187,4 @@ export async function toggleTokenDisabled(tokenId) {
     } catch (error) {
         showToast('Failed to toggle token status', 'error');
     }
-}
+}

@@ -5,7 +5,8 @@ import { emit } from './event-bus.js';
  * Create a modal overlay with the given inner HTML, attach it to <body>,
  * make it active, and wire up the close-on-overlay-click / close-on-Escape
  * behaviour. Returns the modal element so callers can attach their own
- * button handlers.
+ * button handlers. The returned modal has a `.remove()` override that also
+ * unregisters its Escape listener — always remove via `modal.remove()`.
  */
 export function createModal(htmlContent) {
     const modal = document.createElement('div');
@@ -16,6 +17,20 @@ export function createModal(htmlContent) {
     // Animate in
     setTimeout(() => modal.classList.add('active'), 10);
 
+    // Close on Escape
+    const handleEscape = (e) => {
+        if (e.key === 'Escape') {
+            modal.remove();
+        }
+    };
+    // Ensure every removal path unregisters the Escape listener, no matter
+    // who calls the element's remove().
+    const nativeRemove = modal.remove.bind(modal);
+    modal.remove = () => {
+        document.removeEventListener('keydown', handleEscape);
+        nativeRemove();
+    };
+
     // Close on overlay click (not on inner content)
     modal.addEventListener('click', (e) => {
         if (e.target === modal) {
@@ -23,13 +38,6 @@ export function createModal(htmlContent) {
         }
     });
 
-    // Close on Escape
-    const handleEscape = (e) => {
-        if (e.key === 'Escape') {
-            modal.remove();
-            document.removeEventListener('keydown', handleEscape);
-        }
-    };
     document.addEventListener('keydown', handleEscape);
 
     return modal;
@@ -76,6 +84,7 @@ export function createConfirmModal({
     confirmBtn.addEventListener('click', async () => {
         try {
             await onConfirm();
+            modal.remove();
         } catch (err) {
             emit('toast:show', err.message || String(err), 'error');
         }
@@ -94,5 +103,6 @@ export function downloadJsonFile(dataStr, filename) {
     link.href = URL.createObjectURL(blob);
     link.download = filename;
     link.click();
-    URL.revokeObjectURL(link.href);
+    // Revoke after the download has had a chance to start
+    setTimeout(() => URL.revokeObjectURL(link.href), 5000);
 }

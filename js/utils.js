@@ -47,3 +47,18 @@ export function getMessageText(message) {
     }
     return message.content || '';
 }
+
+/**
+ * Escape HTML metacharacters for safe interpolation into markup
+ * (element content and double-quoted attributes).
+ * @param {string} text
+ * @returns {string}
+ */
+export function escapeHtml(text) {
+    return String(text ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}

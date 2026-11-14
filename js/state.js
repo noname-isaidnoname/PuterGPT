@@ -1,6 +1,7 @@
 // State Management Module - Updated to use Zustand-like store
 import { db } from './indexeddb-storage.js';
 import { getState, setState, themeDefinitions } from './store.js';
+import { emit } from './event-bus.js';
 
 // Backward compatibility - export state proxy that mirrors store state
 export const state = new Proxy({}, {
@@ -125,19 +126,37 @@ export function executeThemeJS(code, themeName, hookName) {
         console.log(`✅ Theme "${themeName}" ${hookName} executed successfully`);
     } catch (error) {
         console.error(`❌ Theme "${themeName}" ${hookName} failed:`, error);
-        // Show user feedback for JavaScript errors
-        if (typeof showToast === 'function') {
-            showToast(`Theme effect failed: ${error.message}`, 'error');
-        }
+        emit('toast:show', `Theme effect failed: ${error.message}`, 'error');
     }
+}
+
+// Track which CSS variables the currently applied theme set, so switching
+// themes can remove variables the new theme doesn't define (without this,
+// a custom theme's extra variables linger on <html> forever).
+let appliedThemeVars = [];
+let appliedThemeName = null;
+
+function clearAppliedThemeVars(root) {
+    for (const name of appliedThemeVars) {
+        root.style.removeProperty(name);
+    }
+    appliedThemeVars = [];
 }
 
 // Apply theme to document
 export function applyTheme(theme) {
     const root = document.documentElement;
-    
+
+    // Unknown theme (e.g. a saved custom theme that was deleted): fall back
+    // to light rather than leaving half of the old theme's variables applied.
+    const themeName = themeDefinitions[theme] ? theme : 'light';
+    if (themeName !== theme) {
+        console.warn(`Theme "${theme}" not found; falling back to light`);
+    }
+    const themeConfig = themeDefinitions[themeName];
+
     // Clean up previous theme's JavaScript if it exists
-    const previousTheme = window.currentTheme;
+    const previousTheme = appliedThemeName;
     if (previousTheme && themeDefinitions[previousTheme]?.javascript?.onRemove) {
         executeThemeJS(
             themeDefinitions[previousTheme].javascript.onRemove,
@@ -145,46 +164,45 @@ export function applyTheme(theme) {
             'onRemove'
         );
     }
-    
+
+    // Remove variables from the previous theme that the new theme won't overwrite
+    clearAppliedThemeVars(root);
+
     // Remove any existing theme attribute
     root.removeAttribute('data-theme');
-    root.setAttribute('data-theme', theme === 'dark' ? 'dark' : 'light');
+    root.setAttribute('data-theme', themeName === 'dark' ? 'dark' : 'light');
 
     // Keep the syntax-highlight stylesheet in sync with the built-in themes
     const hljsLink = document.getElementById('hljs-theme');
     if (hljsLink) {
         const darkHljs = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css';
         const lightHljs = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css';
-        hljsLink.href = theme === 'dark' ? darkHljs : lightHljs;
+        hljsLink.href = themeName === 'dark' ? darkHljs : lightHljs;
     }
 
     // Keep the browser chrome color in sync
     const themeColorMeta = document.querySelector('meta[name="theme-color"]');
     if (themeColorMeta) {
-        themeColorMeta.content = theme === 'dark' ? '#151518' : '#ffffff';
+        themeColorMeta.content = themeName === 'dark' ? '#151518' : '#ffffff';
     }
 
-    // Apply theme CSS variables if theme exists
-    if (themeDefinitions[theme]) {
-        const themeConfig = themeDefinitions[theme];
-        
-        // Apply CSS variables
-        Object.entries(themeConfig.cssVars).forEach(([property, value]) => {
-            root.style.setProperty(property, value);
-        });
-        
-        // Execute theme's onApply JavaScript if it exists
-        if (themeConfig.javascript?.onApply) {
-            executeThemeJS(
-                themeConfig.javascript.onApply,
-                theme,
-                'onApply'
-            );
-        }
-        
-        // Store current theme for cleanup
-        window.currentTheme = theme;
+    // Apply CSS variables
+    Object.entries(themeConfig.cssVars).forEach(([property, value]) => {
+        root.style.setProperty(property, value);
+    });
+    appliedThemeVars = Object.keys(themeConfig.cssVars);
+
+    // Execute theme's onApply JavaScript if it exists
+    if (themeConfig.javascript?.onApply) {
+        executeThemeJS(
+            themeConfig.javascript.onApply,
+            themeName,
+            'onApply'
+        );
     }
+
+    // Store current theme for cleanup
+    appliedThemeName = themeName;
 }
 
 applyTheme('light');
@@ -239,12 +257,12 @@ export async function loadSettingsFromDB() {
         
         // Show user feedback for critical errors
         if (error.name === 'QuotaExceededError') {
-            showToast('Storage quota exceeded. Please clear some data and refresh.', 'error');
+            emit('toast:show', 'Storage quota exceeded. Please clear some data and refresh.', 'error');
         } else if (error.name === 'InvalidStateError') {
-            showToast('Database error. Please refresh the page.', 'error');
+            emit('toast:show', 'Database error. Please refresh the page.', 'error');
         } else {
             // For other errors, show a subtle warning
-            showToast('Using default settings due to loading error.', 'warning');
+            emit('toast:show', 'Using default settings due to loading error.', 'warning');
         }
         
         // Ensure we have default settings as fallback
