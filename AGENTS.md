@@ -70,7 +70,7 @@ command -v python3
 ls ~/.cache/ms-playwright    # playwright browsers, if any
 ```
 
-- **Lightpanda** — headless browser (Zig, no graphical engine) from <https://github.com/lightpanda-io/browser>. Install the x86_64 Linux nightly (arm64/macOS links on the releases page):
+- **Lightpanda** — headless browser (Zig, no graphical engine -- faster than Playwright in most cases) from <https://github.com/lightpanda-io/browser>. Install the x86_64 Linux nightly (arm64/macOS links on the releases page):
 
   ```bash
   mkdir -p ~/.local/bin
