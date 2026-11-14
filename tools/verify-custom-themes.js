@@ -1,11 +1,13 @@
 #!/usr/bin/env node
-// Verifies the Appearance panel's theme cards, including custom themes
-// seeded via localStorage before boot (one with a generator-style icon,
-// one with a leading emoji in the name only, one legacy theme with none).
+// Verifies the Appearance panel's theme cards, including custom themes.
+// Custom themes are seeded by loading the app once, writing localStorage,
+// then reloading (the app reads customThemes at boot). One seeded theme has
+// a generator-style icon, one has a leading emoji in the name only, one is a
+// legacy theme with neither.
 //
-// Usage: node tools/verify-custom-themes.js [--base-url URL] [--screenshot-dir DIR]
+// Usage: node tools/verify-custom-themes.js [--backend auto|lightpanda|playwright] [--base-url URL] [--screenshot-dir DIR]
 
-const { run, waitForBoot, openSettings } = require('./lib');
+const { run, waitForBoot, openSettings, sleep } = require('./lib');
 
 const CUSTOM_THEMES = {
     'custom-ocean-1': {
@@ -26,63 +28,63 @@ const CUSTOM_THEMES = {
     }
 };
 
-run('verify-custom-themes', {
-    initScript: {
-        fn: themes => localStorage.setItem('customThemes', JSON.stringify(themes)),
-        arg: CUSTOM_THEMES
-    }
-}, async (page, ctx) => {
+run('verify-custom-themes', async (page, ctx) => {
     const { baseUrl, check } = ctx;
 
-    await page.goto(baseUrl + '/', { waitUntil: 'networkidle' });
+    // Boot once, seed localStorage, reload so bootstrap picks the themes up
+    await page.goto(baseUrl + '/');
     await waitForBoot(page);
-    console.log('BOOT_OK');
+    await page.evaluate(`localStorage.setItem('customThemes', ${JSON.stringify(JSON.stringify(CUSTOM_THEMES))})`);
+    await page.goto(baseUrl + '/');
+    await waitForBoot(page);
+    console.log('BOOT_OK (seeded)');
 
     await openSettings(page);
     await page.click('.settings-tab[data-tab="appearance"]');
-    await page.waitForSelector('#settings-panel-appearance.active');
-    await page.waitForTimeout(400);
+    await page.waitFor("document.getElementById('settings-panel-appearance').classList.contains('active')");
+    await sleep(400);
 
-    // One card per theme + Generate
-    const cards = await page.$$eval('.theme-card', els => els.map(el => ({
-        key: el.dataset.themeCard || null,
-        label: el.querySelector('.theme-card-name')?.textContent.trim(),
-        icon: el.querySelector('.theme-card-icon')?.textContent.trim(),
-        active: el.classList.contains('active')
-    })));
+    const cards = JSON.parse(await page.evaluate(`JSON.stringify(
+        Array.from(document.querySelectorAll('.theme-card')).map(el => ({
+            key: el.dataset.themeCard || null,
+            label: el.querySelector('.theme-card-name')?.textContent.trim(),
+            icon: el.querySelector('.theme-card-icon')?.textContent.trim(),
+            active: el.classList.contains('active')
+        }))
+    )`));
     console.log('CARDS=' + JSON.stringify(cards));
     const byKey = Object.fromEntries(cards.map(c => [c.key, c]));
 
     check(cards.length === 6, `6 cards rendered (2 built-in + 3 custom + generate), got ${cards.length}`);
-    check(byKey['light']?.icon, 'light card has an icon');
-    check(byKey['dark']?.icon, 'dark card has an icon');
+    check(!!byKey['light']?.icon, 'light card has an icon');
+    check(!!byKey['dark']?.icon, 'dark card has an icon');
     check(byKey['custom-ocean-1']?.icon === '🌊', 'custom theme uses its icon field');
     check(byKey['custom-ocean-1']?.label === 'Ocean Breeze', 'custom theme label is the bare name');
     check(byKey['custom-forest-2']?.icon === '🌲', 'leading emoji falls back to icon when no icon field');
     check(byKey['custom-forest-2']?.label === 'Forest Calm', 'leading emoji stripped from label');
     check(byKey['custom-mystery-3']?.icon === '🎨', 'legacy theme falls back to 🎨');
     check(byKey[null]?.label === 'Generate', 'generate card rendered');
-    await ctx.shot(page, 'appearance-custom-themes.png');
+    await ctx.shot('appearance-custom-themes.png');
 
     // Activating a custom card applies its vars and marks it active
     await page.click('.theme-card[data-theme-card="custom-ocean-1"]');
-    await page.waitForTimeout(400);
-    check(await page.$eval('.theme-card[data-theme-card="custom-ocean-1"]', el => el.classList.contains('active')), 'custom card activates on click');
-    check(await page.$eval('html', el => getComputedStyle(el).getPropertyValue('--bg-primary').trim()) === '#0b2a3a', 'custom cssVars applied (--bg-primary)');
-    check(await page.$eval('#delete-theme-btn', el => getComputedStyle(el).display) === 'block', 'delete button shown for custom theme');
-    await ctx.shot(page, 'appearance-custom-active.png');
+    await sleep(400);
+    check(await page.evaluate(`document.querySelector('.theme-card[data-theme-card="custom-ocean-1"]').classList.contains('active')`), 'custom card activates on click');
+    check(await page.evaluate(`getComputedStyle(document.documentElement).getPropertyValue('--bg-primary').trim()`) === '#0b2a3a', 'custom cssVars applied (--bg-primary)');
+    check(await page.evaluate(`getComputedStyle(document.getElementById('delete-theme-btn')).display`) === 'block', 'delete button shown for custom theme');
+    await ctx.shot('appearance-custom-active.png');
 
     // Generate card opens the theme generator
     await page.click('.theme-card-generate');
-    await page.waitForSelector('#theme-generator-modal.active', { timeout: 3000 });
-    await page.click('#theme-generator-modal button:has-text("Cancel")');
-    await page.waitForSelector('#theme-generator-modal:not(.active)', { timeout: 3000 });
+    await page.waitFor("document.getElementById('theme-generator-modal').classList.contains('active')", 3000);
+    await page.evaluate(`(() => { const b = Array.from(document.querySelectorAll('#theme-generator-modal button')).find(x => x.textContent.trim() === 'Cancel'); if (!b) throw new Error('Cancel button not found'); b.click(); })()`);
+    await page.waitFor("!document.getElementById('theme-generator-modal').classList.contains('active')", 3000);
     check(true, 'generate card opens and closes theme generator');
 
     // Delete button opens the confirm modal
     await page.click('#delete-theme-btn');
-    await page.waitForSelector('#delete-theme-modal.active', { timeout: 3000 });
+    await page.waitFor("document.getElementById('delete-theme-modal').classList.contains('active')", 3000);
     check(true, 'delete button opens confirm modal');
-    await page.click('#delete-theme-modal .btn:not(.danger)'); // Cancel
-    await page.waitForSelector('#delete-theme-modal:not(.active)', { timeout: 3000 });
+    await page.evaluate(`(() => { const b = Array.from(document.querySelectorAll('#delete-theme-modal button')).find(x => x.textContent.trim() === 'Cancel'); if (!b) throw new Error('Cancel button not found'); b.click(); })()`);
+    await page.waitFor("!document.getElementById('delete-theme-modal').classList.contains('active')", 3000);
 });

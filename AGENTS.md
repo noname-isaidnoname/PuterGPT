@@ -12,7 +12,7 @@ Plain ES modules loaded with `<script type="module" src="js/app.js">`. Globals r
 | --- | --- |
 | `index.html` | the whole skeleton: sidebar, welcome view, `#input-area`, settings / settings-confirm / code-runner / delete-theme / theme-generator modals, context menu, toast container, and the **default (light) `:root` CSS variables inlined in a `<style>` block** (mirrored from `js/store.js` — see Theming) |
 | `css/*.css` | one concern each, linked from `index.html`: base (body, selection, focus ring), sidebar, chat (message column, welcome view, `.msg-footer`), input (floating composer), markdown (code blocks + banner), message-actions (edit UI), ui-elements (buttons, inputs, labels), modal (base `.modal` + confirms + code runner), settings (settings modal sidebar-tab layout, switches, theme cards), reasoning, responsive, animations (typing dots, toasts), token-management, search |
-| `tools/` | Node verification harnesses (headless Chromium via Playwright, zero app dependencies): boot the app statically served, exercise the settings UI/theme cards, exit non-zero on any console/page error or failed check. See `tools/README.md` |
+| `tools/` | Node verification harnesses (headless browser, zero app dependencies; Lightpanda via raw CDP by default, Playwright for screenshots/mobile emulation): boot the app statically served, exercise the settings UI/theme cards, exit non-zero on any console/page error or failed check. See `tools/README.md` |
 | `js/app.js` | entry point; `bootstrap()` order matters: migrate → `bootstrapThemes()` → settings → token mgmt → `renderThemeCards()` → subscriptions → `loadSavedChats()` → `loadModels()` (network) → image/import/listeners → `initializeWelcomeMode()` (**last** — sets `#main.welcome-mode` synchronously, so it doubles as "app booted") |
 | `js/state.js` | `applyTheme()` (sets inline vars on `<html>`, `data-theme`, swaps the highlight.js `<link id="hljs-theme">` between `github.min.css`/`github-dark.min.css`, sets `meta theme-color`), loads settings from IndexedDB (`loadSettingsFromDB`), Proxy-backed `state` export |
 | `js/store.js` | tiny Zustand-like store (`setState`/`getState`/`subscribe`) + `themeDefinitions` (built-in `light`, `dark`, plus `custom-*` merged in at runtime). Holds the canonical light/dark variable sets |
@@ -57,7 +57,7 @@ Custom properties are the whole theme system (built-ins `light` = default, `dark
 python3 -m http.server 8765
 ```
 
-Headless Playwright harnesses live in `tools/` (see `tools/README.md`) — they serve the repo statically themselves, so no manual server is needed. They exit non-zero on console/page errors, which is the fastest way to run the checks below.
+Headless harnesses live in `tools/` (see `tools/README.md`) — they serve the repo statically themselves, so no manual server is needed. They run on Lightpanda (raw CDP, no dependencies, default) or Playwright (`--backend playwright`; needed for screenshots and mobile viewport emulation), and exit non-zero on console/page errors, which is the fastest way to run the checks below.
 
 ### Installing the verification tools — ask first
 

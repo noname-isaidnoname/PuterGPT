@@ -2,31 +2,41 @@
 // Mobile-viewport check (420x850): the sidebar is off-canvas on mobile,
 // so settings is opened from the welcome view's "Configure Tokens" button.
 //
-// Usage: node tools/verify-mobile.js [--base-url URL] [--screenshot-dir DIR]
+// Usage: node tools/verify-mobile.js [--backend auto|lightpanda|playwright] [--base-url URL] [--screenshot-dir DIR]
+// Note: lightpanda has no graphical engine, so --viewport has no effect on it;
+// mobile checks are only meaningful with the playwright backend.
 
-const { run, waitForBoot } = require('./lib');
+const { run, waitForBoot, sleep } = require('./lib');
 
 run('verify-mobile', { viewport: { width: 420, height: 850 } }, async (page, ctx) => {
-    const { baseUrl, check } = ctx;
+    const { baseUrl, check, backend } = ctx;
+    if (backend !== 'playwright') {
+        console.log('NOTE: mobile checks are only meaningful on the playwright backend (lightpanda has no graphical engine).');
+    }
 
-    await page.goto(baseUrl + '/', { waitUntil: 'networkidle' });
+    await page.goto(baseUrl + '/');
     await waitForBoot(page);
     console.log('BOOT_OK');
 
-    await page.click('.welcome-actions .btn.primary');
-    await page.waitForSelector('#settings-modal.active', { timeout: 3000 });
-    await page.waitForTimeout(400);
-    check(true, 'settings modal opens from welcome view on mobile');
-    await ctx.shot(page, 'mobile-general.png');
+    const canClickWelcome = await page.evaluate(
+        "Array.from(document.querySelectorAll('.welcome-actions .btn')).some(b => b.textContent.includes('Configure'))"
+    );
+    check(canClickWelcome, 'welcome "Configure Tokens" button present on mobile');
+
+    await page.evaluate(`(() => { const b = Array.from(document.querySelectorAll('.welcome-actions .btn')).find(x => x.textContent.includes('Configure')); b.click(); })()`);
+    await page.waitFor("document.getElementById('settings-modal').classList.contains('active')", 3000);
+    await sleep(400);
+    check(true, 'settings modal opens from welcome view');
+    await ctx.shot('mobile-general.png');
 
     // Tabs remain reachable via the horizontal scroll row
     await page.click('.settings-tab[data-tab="tokens"]');
-    await page.waitForSelector('#settings-panel-tokens.active');
-    check(true, 'tokens tab reachable on mobile');
-    await ctx.shot(page, 'mobile-tokens.png');
+    await page.waitFor("document.getElementById('settings-panel-tokens').classList.contains('active')");
+    check(true, 'tokens tab reachable');
+    await ctx.shot('mobile-tokens.png');
 
     await page.click('.settings-tab[data-tab="appearance"]');
-    await page.waitForSelector('#settings-panel-appearance.active');
-    await ctx.shot(page, 'mobile-appearance.png');
-    check(true, 'appearance tab reachable on mobile');
+    await page.waitFor("document.getElementById('settings-panel-appearance').classList.contains('active')");
+    check(true, 'appearance tab reachable');
+    await ctx.shot('mobile-appearance.png');
 });
