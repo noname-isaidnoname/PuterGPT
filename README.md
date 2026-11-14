@@ -71,6 +71,19 @@ Open **Settings & AI Config** in the sidebar:
 
 ---
 
+## Development
+
+Verification is headless (Node, no app dependencies) — see `tools/README.md`:
+
+```bash
+node tools/verify-all.js            # run all harnesses in parallel (~15s)
+node tools/verify-all.js --changed  # only harnesses affected by uncommitted changes
+```
+
+A pre-commit hook in `.githooks/` runs the `--changed` variant and blocks the commit on failure. Enable it with `sh tools/install-hooks.sh` (or `git config core.hooksPath .githooks`). Bypass in emergencies with `git commit --no-verify`.
+
+---
+
 ## Notes
 
 - The app is entirely client-side. Your API tokens never leave your browser (except when they're sent to Puter.ai as part of a request)

@@ -28,6 +28,7 @@ Plain ES modules loaded with `<script type="module" src="js/app.js">`. Globals r
 | `js/event-bus.js` | pub/sub (`on`, `emit`) — **listener exceptions are caught and logged as `console.error('[event-bus] …')`, never thrown** |
 | `js/ui.js` | toasts, context menu, saved-theme delete/reset helpers |
 | `js/code-runner.js` | sandboxed JS/HTML preview modal |
+| `js/modal-helper.js` | shared modal factories: `createModal()` (overlay/Escape/overlay-click), `createConfirmModal()` (cancel/confirm, `confirmStyle: primary\|danger`), `createPromptModal()` (single-line input, Enter=confirm). Themed via the same CSS vars as static modals — use these instead of native `confirm()`/`prompt()`, which are banned from app code |
 
 ## Theming — two files must stay in sync
 
@@ -61,7 +62,11 @@ Custom properties are the whole theme system (built-ins `dark` = default, `light
 python3 -m http.server 8765
 ```
 
-Headless harnesses live in `tools/` (see `tools/README.md`) — they serve the repo statically themselves, so no manual server is needed. They run on Lightpanda (raw CDP, no dependencies, default) or Playwright (`--backend playwright`; needed for screenshots and mobile viewport emulation), and exit non-zero on console/page errors, which is the fastest way to run the checks below. `tools/verify-edge-cases.js` is Playwright-only (it mocks the Puter API via route interception) and covers the generation/abort/error paths, XSS sanitization and the settings discard-tracking flow. `node tools/verify-all.js` (or `--backend all`) runs the whole suite in parallel.
+Headless harnesses live in `tools/` (see `tools/README.md`) — they serve the repo statically themselves, so no manual server is needed. They run on Lightpanda (raw CDP, no dependencies, default) or Playwright (`--backend playwright`; needed for screenshots and mobile viewport emulation), and exit non-zero on console/page errors, which is the fastest way to run the checks below. `tools/verify-edge-cases.js` is Playwright-only (mocks the Puter API **and** the ~576 KB models/details endpoint with a canned list, so it boots fully offline) and covers the generation/abort/error paths, XSS sanitization, the settings discard-tracking flow and the themed confirm/prompt dialogs (`createConfirmModal`/`createPromptModal`). Its scenarios are independent and run concurrently (`EDGE_CONCURRENCY`, default 4; set to 1 for sequential, easier-to-read output). `node tools/verify-all.js` (or `--backend all`) runs the whole suite in parallel with one shared static server; output is per-harness one-liners on success (full output only for failures — `--verbose` prints everything). `--timeout N` bounds each harness (default 180s).
+
+### Git hooks
+
+`.githooks/` carries a `pre-commit` hook (versioned, not activated by clone) that runs `node tools/verify-all.js --changed` and blocks the commit on failure. `--changed` skips only docs/meta paths (`*.md`, LICENSE, `.githooks/`, …); any app code, CSS or tooling change selects the full suite. Install it with `sh tools/install-hooks.sh` (sets `core.hooksPath=.githooks`); bypass with `git commit --no-verify`.
 
 ### Installing the verification tools — ask first
 

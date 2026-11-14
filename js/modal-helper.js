@@ -1,5 +1,6 @@
 // Shared modal helper. Reduces duplication across the token UI modals.
 import { emit } from './event-bus.js';
+import { escapeHtml } from './utils.js';
 
 /**
  * Create a modal overlay with the given inner HTML, attach it to <body>,
@@ -46,6 +47,8 @@ export function createModal(htmlContent) {
 /**
  * Convenience: create a confirmation modal with Cancel + Confirm buttons.
  * The confirm button is styled as primary/danger via the `confirmStyle` arg.
+ * `title` and the button labels are escaped; `body` is trusted HTML and is
+ * inserted as-is (escape any user-controlled content inside it yourself).
  *
  * @param {object} options
  * @param {string} options.title
@@ -59,19 +62,20 @@ export function createModal(htmlContent) {
 export function createConfirmModal({
     title,
     body,
-    confirmLabel,
-    cancelLabel,
+    confirmLabel = 'Confirm',
+    cancelLabel = 'Cancel',
     onConfirm,
     onCancel,
     confirmStyle = 'primary'
 }) {
+    const confirmClass = confirmStyle === 'danger' ? 'btn danger' : 'btn primary';
     const modal = createModal(`
-        <div class="modal">
-            <h3>${title}</h3>
+        <div class="modal" style="max-width: 400px;">
+            <h3>${escapeHtml(title)}</h3>
             ${body}
-            <div style="display:flex; gap:10px; justify-content:center; margin-top:20px;">
-                <button class="btn" id="cancel-btn" style="background-color: var(--danger);">${cancelLabel}</button>
-                <button class="btn primary" id="confirm-btn" style="background-color: var(--accent);">${confirmLabel}</button>
+            <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:20px;">
+                <button class="btn" id="cancel-btn">${escapeHtml(cancelLabel)}</button>
+                <button class="${confirmClass}" id="confirm-btn">${escapeHtml(confirmLabel)}</button>
             </div>
         </div>
     `);
@@ -89,6 +93,99 @@ export function createConfirmModal({
             emit('toast:show', err.message || String(err), 'error');
         }
     });
+    return modal;
+}
+
+/**
+ * Convenience: create a single-line input modal (stand-in for window.prompt).
+ * Enter in the input confirms; Escape / overlay click / Cancel dismisses.
+ * The `title` and labels are escaped. Values are handed to `onConfirm`
+ * trimmed; if onConfirm throws, the modal stays open and the error is
+ * shown as a toast (same contract as createConfirmModal).
+ *
+ * @param {object} options
+ * @param {string} options.title
+ * @param {string} [options.label] - visible label tied to the input
+ * @param {string} [options.message] - trusted HTML shown under the title
+ * @param {string} [options.defaultValue='']
+ * @param {string} [options.placeholder='']
+ * @param {string} [options.confirmLabel='Save']
+ * @param {string} [options.cancelLabel='Cancel']
+ * @param {'primary'|'danger'} [options.confirmStyle='primary']
+ * @param {boolean} [options.allowEmpty=false] - reject empty input when false
+ * @param {(value: string) => void | Promise<void>} [options.onConfirm]
+ * @param {() => void} [options.onCancel]
+ */
+export function createPromptModal({
+    title,
+    label,
+    message,
+    defaultValue = '',
+    placeholder = '',
+    confirmLabel = 'Save',
+    cancelLabel = 'Cancel',
+    confirmStyle = 'primary',
+    allowEmpty = false,
+    onConfirm,
+    onCancel
+}) {
+    const confirmClass = confirmStyle === 'danger' ? 'btn danger' : 'btn primary';
+    const inputId = 'prompt-modal-input';
+    const modal = createModal(`
+        <div class="modal" style="max-width: 400px;">
+            <h3>${escapeHtml(title)}</h3>
+            ${message ? `<p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.5; margin: 0;">${message}</p>` : ''}
+            <div class="select-group" style="margin-bottom: 0;">
+                ${label ? `<label for="${inputId}">${escapeHtml(label)}</label>` : ''}
+                <input type="text" id="${inputId}" value="${escapeHtml(defaultValue)}" placeholder="${escapeHtml(placeholder)}" autocomplete="off" spellcheck="false">
+            </div>
+            <div style="display:flex; gap:10px; justify-content:flex-end;">
+                <button class="btn" id="prompt-cancel-btn">${escapeHtml(cancelLabel)}</button>
+                <button class="${confirmClass}" id="prompt-confirm-btn">${escapeHtml(confirmLabel)}</button>
+            </div>
+        </div>
+    `);
+    const input = modal.querySelector('#' + inputId);
+    const cancelBtn = modal.querySelector('#prompt-cancel-btn');
+    const confirmBtn = modal.querySelector('#prompt-confirm-btn');
+
+    const submit = async () => {
+        const value = input.value.trim();
+        if (!allowEmpty && !value) {
+            emit('toast:show', 'Please enter a value', 'error');
+            input.focus();
+            return;
+        }
+        if (!onConfirm) {
+            modal.remove();
+            return;
+        }
+        try {
+            await onConfirm(value);
+            modal.remove();
+        } catch (err) {
+            emit('toast:show', err.message || String(err), 'error');
+        }
+    };
+
+    cancelBtn.addEventListener('click', () => {
+        modal.remove();
+        if (onCancel) onCancel();
+    });
+    confirmBtn.addEventListener('click', submit);
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            submit();
+        }
+    });
+
+    // Focus and pre-select the current value so typing replaces it
+    setTimeout(() => {
+        input.focus();
+        input.select();
+    }, 60);
+
     return modal;
 }
 

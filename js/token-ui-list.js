@@ -3,6 +3,7 @@ import { tokenManager } from './token-manager.js';
 import { els } from './state.js';
 import { showToast } from './ui.js';
 import { escapeHtml } from './utils.js';
+import { createConfirmModal, createPromptModal } from './modal-helper.js';
 
 /**
  * Briefly highlight a newly-added token in the list.
@@ -141,17 +142,23 @@ export async function addToken() {
 export async function deleteToken(tokenId) {
     const token = await tokenManager.getTokenById(tokenId);
     if (!token) return;
-    
-    if (!confirm(`Delete token "${token.name}"? This action cannot be undone.`)) {
-        return;
-    }
-    
-    if (await tokenManager.removeToken(tokenId)) {
-        await renderTokenList();
-        showToast(`Token "${token.name}" deleted`, 'success');
-    } else {
-        showToast('Failed to delete token', 'error');
-    }
+
+    createConfirmModal({
+        title: 'Delete Token?',
+        body: `<p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.5; margin: 0;">Delete token "${escapeHtml(token.name)}"? This action cannot be undone.</p>`,
+        confirmLabel: 'Delete',
+        cancelLabel: 'Cancel',
+        confirmStyle: 'danger',
+        onConfirm: async () => {
+            if (await tokenManager.removeToken(tokenId)) {
+                await renderTokenList();
+                showToast(`Token "${token.name}" deleted`, 'success');
+            } else {
+                // Throwing keeps the dialog open and surfaces the error as a toast
+                throw new Error('Failed to delete token');
+            }
+        }
+    });
 }
 
 export async function setActiveToken(tokenId) {
@@ -167,16 +174,23 @@ export async function setActiveToken(tokenId) {
 export async function editTokenName(tokenId) {
     const token = await tokenManager.getTokenById(tokenId);
     if (!token) return;
-    
-    const newName = prompt('Enter new name for token:', token.name);
-    if (newName && newName.trim() !== token.name) {
-        if (await tokenManager.updateTokenName(tokenId, newName.trim())) {
-            await renderTokenList();
-            showToast('Token name updated', 'success');
-        } else {
-            showToast('Failed to update token name', 'error');
+
+    createPromptModal({
+        title: 'Rename Token',
+        label: 'Token name',
+        defaultValue: token.name,
+        placeholder: 'Enter a name for this token',
+        confirmLabel: 'Rename',
+        onConfirm: async (newName) => {
+            if (newName === token.name) return;
+            if (await tokenManager.updateTokenName(tokenId, newName)) {
+                await renderTokenList();
+                showToast('Token name updated', 'success');
+            } else {
+                throw new Error('Failed to update token name');
+            }
         }
-    }
+    });
 }
 
 export async function toggleTokenDisabled(tokenId) {

@@ -3,6 +3,7 @@ import { db } from './indexeddb-storage.js';
 import { setState, getState, subscribe, themeDefinitions } from './store.js';
 import { emit, on } from './event-bus.js';
 import { abortAssistantResponse } from './chat-api.js';
+import { createConfirmModal, createPromptModal } from './modal-helper.js';
 
 // Set up reactive subscription to update image preview when attached images change
 subscribe((newState, prevState) => {
@@ -177,17 +178,28 @@ window.showChatContextMenu = showChatContextMenu;
 
 window.handleRenameChat = async () => {
     const chat = await db.chats.get(activeContextChatId);
-    const newTitle = prompt("Rename chat:", chat ? chat.title : "");
-    if (newTitle !== null) {
-        emit('chat:rename', activeContextChatId, newTitle);
-    }
+    createPromptModal({
+        title: 'Rename Chat',
+        label: 'Chat name',
+        defaultValue: chat ? chat.title : '',
+        placeholder: 'Enter a name for this chat',
+        confirmLabel: 'Rename',
+        onConfirm: (newTitle) => {
+            emit('chat:rename', activeContextChatId, newTitle);
+        }
+    });
     hideContextMenu();
 };
 
 window.handleDeleteChat = () => {
-    if (confirm("Delete this chat?")) {
-        window.deleteChat(activeContextChatId);
-    }
+    createConfirmModal({
+        title: 'Delete Chat?',
+        body: '<p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.5; margin: 0;">This chat will be permanently deleted. This action cannot be undone.</p>',
+        confirmLabel: 'Delete',
+        cancelLabel: 'Cancel',
+        confirmStyle: 'danger',
+        onConfirm: () => window.deleteChat(activeContextChatId)
+    });
     hideContextMenu();
 };
 
