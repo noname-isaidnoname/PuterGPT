@@ -8,12 +8,32 @@
 
 .message-content pre {
     background: var(--pre-bg);
-    padding: 14px 16px;
+    padding: 0px 0px;
     margin: 0;
     overflow-x: auto;
     border: none;
     font-size: 0.8rem;
     line-height: 1.6;
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+.message-content pre::-webkit-scrollbar {
+    height: 8px;
+    width: 8px;
+}
+
+.message-content pre::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.message-content pre::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 4px;
+}
+
+.message-content pre::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover);
 }
 
 .message-content code {
