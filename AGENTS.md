@@ -24,7 +24,7 @@ Plain ES modules loaded with `<script type="module" src="js/app.js">`. Globals r
 | `js/storage.js`, `js/indexeddb-storage.js` | persistence: IndexedDB **'PuterGPT'** via Dexie — stores `chats`, `tokens`, `settings`. One-off migration of legacy `puter_*` localStorage keys runs on boot |
 | `js/theme-generator.js`, `js/theme-ui.js` | AI/custom themes: prompts, JS-effects execution (`executeThemeJS`), dropdown population |
 | `js/models.js`, `js/compression.js` | model list + pricing; lz-string compression for share links |
-| `js/search.js`, `js/search-ui.js` | full-text search modal (Ctrl+Shift+F / button) |
+| `js/search.js`, `js/search-ui.js`, `css/search.css` | full-text search. The Advanced Search modal mirrors the settings modal chrome (`.search-header`/`.search-body`/`.search-footer`, reuses `.settings-close` and `.settings-badge`); close keeps the query + results (resynced on next open) |
 | `js/event-bus.js` | pub/sub (`on`, `emit`) — **listener exceptions are caught and logged as `console.error('[event-bus] …')`, never thrown** |
 | `js/ui.js` | toasts, context menu, saved-theme delete/reset helpers |
 | `js/code-runner.js` | sandboxed JS/HTML preview modal |
@@ -115,6 +115,7 @@ If `playwright` is installed but `chromium` binary isn't, Don't ask the user whe
 - `marked`, `hljs`, `Dexie`, `lz-string` are CDN/global scripts (no imports); `hljs` loads `github.min.css` by default and `applyTheme()` swaps it for dark.
 - Inline `style="…"` on some buttons/inputs is deliberate legacy; converting to classes is fine if you keep the `id`s.
 - `preferences`-dependent JS (token order, rotation) lives in `localStorage` (`puter_tokens` etc.) only until the first migration to IndexedDB.
+- Global `input[type="text"]` / `.btn` rules in `ui-elements.css` outrank same-specificity component classes — a class like `.search-input` silently loses its `padding`. Override with element+class (`input.search-input`) or accept the global styling.
 - This repo is also deployed straight to websim.com (the footer script in `index.html` detects an iframe host) — don't break `window.location.ancestorOrigins` logic or the `id="puter-footer"` hook.
 
 ## Commit conventions

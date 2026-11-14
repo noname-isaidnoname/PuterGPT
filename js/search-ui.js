@@ -27,77 +27,83 @@ class SearchUI {
 
     // Create search modal HTML
     createSearchModal() {
-        console.log('Creating search modal...');
         try {
             const modalHTML = `
             <div class="modal-overlay" id="search-modal" style="display: none;">
-                <div class="modal search-modal">
-                    <h3>
-                        <span class="material-icons-outlined">search</span>
-                        Advanced Search
-                        <span style="font-size: 0.7rem; background: var(--warning); color: white; padding: 2px 8px; border-radius: 12px; margin-left: 10px;">Experimental</span>
-                    </h3>
-                    
-                    <div class="search-input-section">
+                <div class="modal search-modal" role="dialog" aria-modal="true" aria-labelledby="search-modal-heading">
+                    <div class="search-header">
+                        <h3 id="search-modal-heading">
+                            <span class="material-icons-outlined" aria-hidden="true">manage_search</span>
+                            Advanced Search
+                            <span class="settings-badge">Experimental</span>
+                        </h3>
+                        <button class="settings-close" onclick="searchUI.closeSearchModal()" title="Close" aria-label="Close advanced search">
+                            <span class="material-icons-outlined">close</span>
+                        </button>
+                    </div>
+
+                    <div class="search-body">
                         <div class="search-input-wrapper">
-                            <input type="text" id="search-input" class="search-input" placeholder="Search across all conversations..." autocomplete="off">
-                            <button id="search-btn" class="search-btn">
-                                <span class="material-icons-outlined">search</span>
-                                Search
-                            </button>
+                            <span class="search-input-icon material-icons-outlined" aria-hidden="true">search</span>
+                            <input type="text" id="search-input" class="search-input" placeholder="Search across all conversations..." autocomplete="off" aria-label="Search across all conversations">
+                            <button id="search-btn" class="btn primary search-btn">Search</button>
                         </div>
-                        
+
                         <div id="search-history" class="search-history"></div>
-                    </div>
-                    
-                    <div class="search-filters">
-                        <div class="filter-group">
-                            <label for="date-from-filter">From Date</label>
-                            <input type="date" id="date-from-filter">
+
+                        <div class="search-filters" role="group" aria-label="Search filters">
+                            <div class="filter-group">
+                                <label for="date-from-filter">From Date</label>
+                                <input type="date" id="date-from-filter">
+                            </div>
+
+                            <div class="filter-group">
+                                <label for="date-to-filter">To Date</label>
+                                <input type="date" id="date-to-filter">
+                            </div>
+
+                            <div class="filter-group">
+                                <label for="model-filter">Model</label>
+                                <select id="model-filter">
+                                    <option value="all">All Models</option>
+                                </select>
+                            </div>
+
+                            <div class="filter-group">
+                                <label for="content-type-filter">Content Type</label>
+                                <select id="content-type-filter">
+                                    <option value="all">All Content</option>
+                                    <option value="text">Text Only</option>
+                                    <option value="images">With Images</option>
+                                </select>
+                            </div>
                         </div>
-                        
-                        <div class="filter-group">
-                            <label for="date-to-filter">To Date</label>
-                            <input type="date" id="date-to-filter">
-                        </div>
-                        
-                        <div class="filter-group">
-                            <label for="model-filter">Model</label>
-                            <select id="model-filter">
-                                <option value="all">All Models</option>
-                            </select>
-                        </div>
-                        
-                        <div class="filter-group">
-                            <label for="content-type-filter">Content Type</label>
-                            <select id="content-type-filter">
-                                <option value="all">All Content</option>
-                                <option value="text">Text Only</option>
-                                <option value="images">With Images</option>
-                            </select>
-                        </div>
-                    </div>
-                    
-                    <div class="search-results">
-                        <div id="search-results-content">
-                            <div class="no-results">
-                                <span class="material-icons-outlined">search</span>
-                                <h4>Start Searching</h4>
-                                <p>Enter a search query to find conversations and messages.</p>
+
+                        <div class="search-results">
+                            <div id="search-results-content">
+                                <div class="no-results">
+                                    <span class="material-icons-outlined">search</span>
+                                    <h4>Start Searching</h4>
+                                    <p>Enter a search query to find conversations and messages.</p>
+                                </div>
                             </div>
                         </div>
                     </div>
-                    
-                    <div class="search-shortcuts">
-                        <strong>Shortcuts:</strong> 
-                        <kbd>Ctrl+F</kbd> Search current chat • 
-                        <kbd>Ctrl+Shift+F</kbd> Advanced search • 
-                        <kbd>Esc</kbd> Close
-                    </div>
-                    
-                    <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
-                        <button class="btn" onclick="searchUI.closeSearchModal()">Close</button>
-                        <button class="btn primary" onclick="searchUI.rebuildIndex()">Rebuild Index</button>
+
+                    <div class="search-footer">
+                        <div class="search-shortcuts">
+                            <kbd>Ctrl</kbd>+<kbd>F</kbd> current chat
+                            <span class="search-shortcut-sep" aria-hidden="true">•</span>
+                            <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd> advanced
+                            <span class="search-shortcut-sep" aria-hidden="true">•</span>
+                            <kbd>Esc</kbd> close
+                        </div>
+                        <div class="search-footer-actions">
+                            <button class="btn" onclick="searchUI.rebuildIndex()" title="Rebuild the index from all saved chats">
+                                <span class="material-icons-outlined">refresh</span> Rebuild Index
+                            </button>
+                            <button class="btn primary" onclick="searchUI.closeSearchModal()">Close</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -109,13 +115,10 @@ class SearchUI {
         `;
         
         document.body.insertAdjacentHTML('beforeend', modalHTML);
-        console.log('Search modal HTML added to body');
-        
+
         // Verify the modal was added
         const modal = document.getElementById('search-modal');
-        if (modal) {
-            console.log('Search modal found in DOM');
-        } else {
+        if (!modal) {
             console.error('Search modal not found after insertion');
         }
         } catch (error) {
@@ -145,6 +148,16 @@ class SearchUI {
                     this.clearResults();
                     break;
             }
+        });
+
+        // Keyboard activation for the expandable result headers (the Open
+        // and Clear buttons are native <button>s and need nothing).
+        resultsRoot.addEventListener('keydown', (e) => {
+            if (e.key !== 'Enter' && e.key !== ' ') return;
+            const actionEl = e.target.closest('[data-action="toggle"]');
+            if (!actionEl || !resultsRoot.contains(actionEl)) return;
+            e.preventDefault();
+            this.toggleResultExpansion(actionEl.dataset.chatId);
         });
 
         // Current chat search results (jump to message)
@@ -243,7 +256,6 @@ class SearchUI {
 
     // Open search modal
     openSearchModal() {
-        console.log('openSearchModal method called');
         try {
             const modal = document.getElementById('search-modal');
             if (!modal) {
@@ -253,38 +265,39 @@ class SearchUI {
             modal.style.display = 'flex';
             modal.classList.add('active'); // Add active class for visibility
             this.isSearchModalOpen = true;
-            
+
+            // Resync with whatever is in the input — results persist in the
+            // DOM across open/close, so rebuild state to match (cached index
+            // keeps this cheap). Empty input resets to the empty state.
+            const query = (document.getElementById('search-input')?.value || '').trim();
+            if (query) {
+                this.performSearch(query);
+            } else {
+                this.clearResults();
+            }
+
             // Focus search input
             setTimeout(() => {
-                const searchInput = document.getElementById('search-input');
-                if (searchInput) {
-                    searchInput.focus();
-                } else {
-                    console.error('Search input not found');
-                }
+                document.getElementById('search-input')?.focus();
             }, 100);
-            
+
             // Load search history
             this.loadSearchHistory();
-            
+
             // Populate model filter
             this.populateModelFilter();
-            
-            console.log('Search modal opened successfully');
         } catch (error) {
             console.error('Error in openSearchModal:', error);
         }
     }
 
-    // Close search modal
+    // Close search modal — the query and results are kept in the DOM and
+    // resynced on next open, so closing is lossless.
     closeSearchModal() {
         const modal = document.getElementById('search-modal');
         modal.classList.remove('active'); // Remove active class
         modal.style.display = 'none';
         this.isSearchModalOpen = false;
-        this.currentResults = [];
-        this.currentQuery = '';
-        this.expandedResults.clear();
     }
 
     // Toggle current chat search
@@ -457,7 +470,7 @@ class SearchUI {
 
         return `
             <div class="search-result-item ${isExpanded ? 'expanded' : ''}" data-chat-id="${safeChatId}">
-                <div class="search-result-header" data-action="toggle" data-chat-id="${safeChatId}">
+                <div class="search-result-header" data-action="toggle" data-chat-id="${safeChatId}" tabindex="0" role="button" aria-expanded="${isExpanded}">
                     <div>
                         <div class="search-result-title">${escapeHtml(result.chatTitle)}</div>
                         <div class="search-result-meta">
@@ -511,7 +524,8 @@ class SearchUI {
 
         document.querySelectorAll('.search-result-item').forEach(item => {
             if (item.dataset.chatId === chatId) {
-                item.classList.toggle('expanded');
+                const expanded = item.classList.toggle('expanded');
+                item.querySelector('[data-action="toggle"]')?.setAttribute('aria-expanded', String(expanded));
             }
         });
     }
@@ -624,7 +638,6 @@ window.searchUI = searchUI;
 
 // Make functions globally available
 window.openSearchModal = function() {
-    console.log('openSearchModal called');
     try {
         searchUI.openSearchModal();
     } catch (error) {
@@ -632,7 +645,6 @@ window.openSearchModal = function() {
     }
 };
 window.closeSearchModal = function() {
-    console.log('closeSearchModal called');
     try {
         searchUI.closeSearchModal();
     } catch (error) {

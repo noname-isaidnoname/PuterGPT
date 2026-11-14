@@ -1,47 +1,98 @@
 /* Search Modal and UI Styles */
 
-/* Search Modal */
+/* Search Modal — same chrome as the settings modal: fixed height, header
+   bar with close button, scrollable body, border-top footer. */
 .search-modal {
-    max-width: 760px;
-    width: 90%;
-    max-height: 80vh;
-    display: flex;
-    flex-direction: column;
+    max-width: 860px;
+    width: 100%;
+    height: min(640px, 82vh);
+    max-height: 82vh;
+    padding: 0;
+    gap: 0;
+    overflow: hidden;
 }
 
-.search-modal h3 {
-    margin-bottom: 4px;
+.search-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
+}
+
+.search-header h3 {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--text-primary);
     display: flex;
     align-items: center;
     gap: 10px;
+    min-width: 0;
 }
 
-.search-modal h3 .material-icons-outlined {
-    font-size: 22px;
+.search-header h3 .material-icons-outlined {
+    font-size: 20px;
     color: var(--accent);
 }
 
-/* Search Input Section */
-.search-input-section {
-    margin-bottom: 16px;
+.search-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 20px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
 }
 
+.search-body::-webkit-scrollbar {
+    width: var(--scrollbar-width-modal);
+}
+
+.search-body::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.search-body::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 4px;
+}
+
+/* Search Input Section */
 .search-input-wrapper {
+    position: relative;
     display: flex;
     gap: 8px;
-    margin-bottom: 12px;
+    align-items: center;
 }
 
-.search-input {
+.search-input-icon {
+    position: absolute;
+    left: 13px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 20px;
+    color: var(--text-caption);
+    pointer-events: none;
+}
+
+/* element+class selectors beat the global input[type="text"] rules */
+input.search-input {
     flex: 1;
-    padding: 12px 14px;
+    min-width: 0;
+    padding: 10px 12px 10px 41px;
     border: 1px solid var(--border-color);
-    border-radius: var(--radius-pill);
-    font-size: 0.95rem;
+    border-radius: var(--radius-md);
+    font-size: 0.9rem;
     background: var(--input-bg);
     color: var(--text-primary);
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
     outline: none;
+    font-family: var(--font-sans);
 }
 
 .search-input:focus {
@@ -51,26 +102,12 @@
 }
 
 .search-btn {
-    padding: 12px 18px;
-    background: var(--accent);
-    color: #ffffff;
-    border: none;
-    border-radius: var(--radius-pill);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-weight: 500;
-    transition: background-color 0.15s ease;
+    padding: 10px 18px;
+    flex-shrink: 0;
 }
 
-.search-btn:hover {
-    background: var(--accent-hover);
-}
-
-.search-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
+.search-btn .material-icons-outlined {
+    font-size: 18px;
 }
 
 /* Search History */
@@ -78,7 +115,6 @@
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
-    margin-bottom: 12px;
 }
 
 .search-history-item {
@@ -98,13 +134,17 @@
     color: var(--text-primary);
 }
 
+.search-history-item:focus-visible {
+    outline: 2px solid var(--input-focus-border);
+    outline-offset: 1px;
+}
+
 /* Search Filters */
 .search-filters {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-    gap: 12px;
-    margin-bottom: 16px;
-    padding: 12px;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 12px 16px;
+    padding: 14px 16px;
     background: var(--bg-primary);
     border-radius: var(--radius-lg);
     border: 1px solid var(--border-color);
@@ -113,43 +153,47 @@
 .filter-group {
     display: flex;
     flex-direction: column;
-    gap: 5px;
+    gap: 6px;
+    min-width: 0;
 }
 
 .filter-group label {
-    font-size: 0.75rem;
+    font-size: 0.8rem;
     font-weight: 500;
     color: var(--text-secondary);
 }
 
 .filter-group input,
 .filter-group select {
-    padding: 7px 9px;
+    padding: 8px 10px;
     border: 1px solid var(--border-color);
     border-radius: var(--radius-md);
     background: var(--input-bg);
     color: var(--text-primary);
     font-size: 0.85rem;
     outline: none;
+    width: 100%;
+    min-width: 0;
+    color-scheme: light dark;
 }
 
 .filter-group input:focus,
 .filter-group select:focus {
     outline: none;
     border-color: var(--input-focus-border);
+    box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
 /* Search Results */
 .search-results {
-    flex: 1;
-    overflow-y: auto;
-    min-height: 200px;
+    min-height: 160px;
 }
 
 .search-results-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 12px;
     margin-bottom: 12px;
     padding-bottom: 10px;
     border-bottom: 1px solid var(--border-color);
@@ -191,6 +235,10 @@
     transition: border-color 0.15s ease;
 }
 
+.search-result-item:last-child {
+    margin-bottom: 0;
+}
+
 .search-result-item:hover {
     border-color: var(--border-strong);
 }
@@ -204,11 +252,17 @@
     gap: 12px;
 }
 
+.search-result-header:focus-visible {
+    outline: 2px solid var(--input-focus-border);
+    outline-offset: -2px;
+}
+
 .search-result-title {
     font-weight: 600;
     font-size: 0.9rem;
     color: var(--text-primary);
     margin-bottom: 3px;
+    overflow-wrap: anywhere;
 }
 
 .search-result-meta {
@@ -237,6 +291,7 @@
     font-size: 0.7rem;
     font-weight: 600;
     flex-shrink: 0;
+    white-space: nowrap;
 }
 
 /* Search Result Matches */
@@ -266,6 +321,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 12px;
     margin-bottom: 6px;
 }
 
@@ -287,6 +343,7 @@
     line-height: 1.5;
     color: var(--text-primary);
     white-space: pre-wrap;
+    overflow-wrap: anywhere;
 }
 
 /* Search Highlighting */
@@ -301,19 +358,27 @@
 /* No Results */
 .no-results {
     text-align: center;
-    padding: 40px 20px;
+    padding: 36px 20px;
     color: var(--text-secondary);
 }
 
 .no-results .material-icons-outlined {
-    font-size: 44px;
+    font-size: 40px;
     margin-bottom: 12px;
     opacity: 0.4;
 }
 
 .no-results h4 {
-    margin-bottom: 8px;
+    margin: 0 0 6px;
+    font-size: 0.95rem;
+    font-weight: 600;
     color: var(--text-primary);
+}
+
+.no-results p {
+    margin: 0;
+    font-size: 0.85rem;
+    line-height: 1.5;
 }
 
 /* Current Chat Search */
@@ -370,13 +435,14 @@
     display: flex;
     justify-content: center;
     align-items: center;
+    gap: 10px;
     padding: 40px;
     color: var(--text-secondary);
+    font-size: 0.9rem;
 }
 
 .search-loading .material-icons-outlined {
     animation: spin 1s linear infinite;
-    margin-right: 10px;
 }
 
 @keyframes spin {
@@ -384,26 +450,51 @@
     to { transform: rotate(360deg); }
 }
 
-/* Responsive Design */
-@media (max-width: 768px) {
-    .search-modal {
-        width: 95%;
-        max-height: 90vh;
-    }
+/* Footer — shortcuts hint left, actions right */
+.search-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 12px 20px;
+    border-top: 1px solid var(--border-color);
+    flex-shrink: 0;
+}
 
-    .search-filters {
-        grid-template-columns: 1fr;
-    }
+.search-shortcuts {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
 
-    .search-input-wrapper {
-        flex-direction: column;
-    }
+.search-shortcut-sep {
+    color: var(--text-caption);
+}
 
-    .current-chat-search {
-        right: 10px;
-        left: 10px;
-        max-width: none;
-    }
+.search-shortcuts kbd {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-family: var(--font-mono);
+    font-size: 0.78em;
+    color: var(--text-secondary);
+}
+
+.search-footer-actions {
+    display: flex;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+.search-footer-actions .material-icons-outlined {
+    font-size: 17px;
 }
 
 /* Keyboard Navigation */
@@ -412,22 +503,43 @@
     box-shadow: 0 0 0 2px var(--accent-soft);
 }
 
-/* Search Shortcuts Help */
-.search-shortcuts {
-    margin-top: 12px;
-    padding: 10px 12px;
-    background: var(--bg-primary);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-md);
-    font-size: 0.78rem;
-    color: var(--text-secondary);
+/* Responsive Design */
+@media (max-width: 720px) {
+    .search-shortcuts {
+        display: none;
+    }
+
+    .search-footer {
+        justify-content: flex-end;
+    }
 }
 
-.search-shortcuts kbd {
-    background: var(--bg-secondary);
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    padding: 1px 6px;
-    font-family: var(--font-mono);
-    font-size: 0.78em;
+@media (max-width: 640px) {
+    .search-modal {
+        height: 88vh;
+        max-height: 88vh;
+    }
+
+    .search-body {
+        padding: 16px;
+    }
+
+    .search-filters {
+        grid-template-columns: 1fr;
+    }
+
+    .search-footer-actions {
+        width: 100%;
+    }
+
+    .search-footer-actions .btn {
+        flex: 1;
+        justify-content: center;
+    }
+
+    .current-chat-search {
+        right: 10px;
+        left: 10px;
+        max-width: none;
+    }
 }
