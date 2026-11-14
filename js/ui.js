@@ -201,6 +201,19 @@ window.newChat = () => {
     if (window.innerWidth <= 768) els.sideBar.classList.remove('open');
 };
 
+window.switchSettingsTab = (tab) => {
+    const modal = els.settingsModal;
+    if (!modal) return;
+    modal.querySelectorAll('.settings-tab').forEach(btn => {
+        const active = btn.dataset.tab === tab;
+        btn.classList.toggle('active', active);
+        btn.setAttribute('aria-selected', active ? 'true' : 'false');
+    });
+    modal.querySelectorAll('.settings-panel').forEach(panel => {
+        panel.classList.toggle('active', panel.id === `settings-panel-${tab}`);
+    });
+};
+
 window.openSettings = () => {
     els.settingsModal.classList.add('active');
     // Store current values as original when opening settings
@@ -210,7 +223,7 @@ window.openSettings = () => {
         autoScroll: els.autoScroll.checked,
         tokenRotation: els.tokenRotation.checked,
         enableWebSearch: els.enableWebSearch ? els.enableWebSearch.checked : false,
-        theme: els.themeSelect ? els.themeSelect.value : 'light'
+        theme: state.config?.theme || 'light'
     };
     setState({ originalSettings: currentSettings });
 };
@@ -243,10 +256,15 @@ window.discardChangesAndClose = async () => {
     await db.settings.put({ key: 'enable_web_search', value: currentState.originalSettings.enableWebSearch });
     await db.settings.put({ key: 'theme', value: currentState.originalSettings.theme });
     
+    // Restore the original theme in state so cards/UI stay in sync
+    setState((state) => ({
+        config: { ...state.config, theme: currentState.originalSettings.theme }
+    }));
+
     // Apply the original theme
     const { applyTheme } = await import('./state.js');
     applyTheme(currentState.originalSettings.theme);
-    
+
     els.settingsModal.classList.remove('active');
     els.settingsConfirmModal.classList.remove('active');
     showToast("Changes discarded");
@@ -350,9 +368,9 @@ window.confirmDeleteTheme = async () => {
     const { applyTheme } = await import('./state.js');
     applyTheme('light');
     
-    // Update dropdown
-    const { populateThemeDropdown } = await import('./theme-ui.js');
-    populateThemeDropdown();
+    // Re-render theme cards (the deleted theme must disappear)
+    const { renderThemeCards } = await import('./theme-ui.js');
+    renderThemeCards();
     
     // Close modal
     closeDeleteThemeModal();

@@ -264,7 +264,6 @@ export const els = {
     freeOnlyFilter: document.getElementById('free-only-filter'),
     modelCostDisplay: document.getElementById('model-cost-display'),
     systemPrompt: document.getElementById('system-prompt'),
-    themeSelect: document.getElementById('theme-select'),
     settingsModal: document.getElementById('settings-modal'),
     settingsConfirmModal: document.getElementById('settings-confirm-modal'),
     toastContainer: document.getElementById('toast-container'),
@@ -302,7 +301,7 @@ export function hasSettingsChanged() {
     const currentAutoScroll = els.autoScroll.checked;
     const currentTokenRotation = els.tokenRotation.checked;
     const currentEnableWebSearch = els.enableWebSearch ? els.enableWebSearch.checked : false;
-    const currentTheme = els.themeSelect ? els.themeSelect.value : 'light';
+    const currentTheme = getState().config?.theme || 'light';
     
     const currentState = getState();
     
@@ -324,5 +323,4 @@ export function resetSettingsToOriginal() {
     els.autoScroll.checked = currentState.originalSettings.autoScroll;
     els.tokenRotation.checked = currentState.originalSettings.tokenRotation;
     if (els.enableWebSearch) els.enableWebSearch.checked = currentState.originalSettings.enableWebSearch;
-    if (els.themeSelect) els.themeSelect.value = currentState.originalSettings.theme;
 }

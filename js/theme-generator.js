@@ -482,7 +482,8 @@ ${jsSection}
 REQUIREMENTS:
 1. Generate a valid JSON object with this structure:
 {
-  "name": "string (creative theme name with emoji that captures the essence)",
+  "name": "string (creative theme name that captures the essence)",
+  "icon": "string (a single emoji or unicode glyph shown on the theme card, e.g. 🌊, 🌲, 🔥, 🌵, 🎮 — pick one that evokes the theme)",
   "description": "string (brief description of the theme's mood and style)",
   "cssVars": {
 ${STANDARD_VARS_DOC}
@@ -505,7 +506,8 @@ ${jsPrinciple}
 CRITICAL RULES:
 - Respond with ONLY the JSON object, no other text
 - All CSS values must be valid CSS strings (colors, sizes, fonts)
-- Theme name should be creative and descriptive with appropriate emoji
+- Theme name should be creative and descriptive
+- The "icon" field must be exactly one emoji or single unicode glyph — never more than one glyph, never words, never an HTML entity
 ${jsRule}
 - Be ambitious - create something unique and memorable!
 
@@ -569,6 +571,14 @@ function parseAndValidateTheme(themeRaw) {
     if (!theme.name || !theme.cssVars) {
         throw new Error('Invalid theme structure - missing name or CSS variables');
     }
+    // Icon must be a single glyph — drop it otherwise (card falls back to a default)
+    if (typeof theme.icon === 'string') {
+        const trimmed = theme.icon.trim();
+        const glyphs = [...new Intl.Segmenter('en', { granularity: 'grapheme' }).segment(trimmed)];
+        theme.icon = (trimmed && glyphs.length === 1) ? trimmed : undefined;
+    } else {
+        theme.icon = undefined;
+    }
     return theme;
 }
 
@@ -594,10 +604,13 @@ async function applyNewTheme(themeId, themeName) {
     await db.settings.put({ key: 'customThemes', value: customThemes });
     themeDefinitions[themeId] = customThemes[themeId];
 
-    import('./state.js').then(m => m.applyTheme(themeId));
-    const { populateThemeDropdown } = await import('./theme-ui.js');
-    populateThemeDropdown();
-    els.themeSelect.value = themeId;
+    // Switch to the new theme (triggers applyTheme + card sync via subscription)
+    const { setState } = await import('./store.js');
+    setState((s) => ({ config: { ...s.config, theme: themeId } }));
+    await db.settings.put({ key: 'theme', value: themeId });
+
+    const { renderThemeCards } = await import('./theme-ui.js');
+    renderThemeCards();
     closeThemeGenerator();
 
     emit('toast:show', `Custom theme "${themeName}" created and applied!`, 'success');
@@ -645,14 +658,5 @@ export async function loadCustomThemes() {
         Object.entries(customThemes).forEach(([id, theme]) => {
             themeDefinitions[id] = theme;
         });
-    }
-}
-
-// Handle theme select change for custom option
-export function handleThemeSelectChange(e) {
-    if (e.target.value === 'generate-custom') {
-        openThemeGenerator();
-        // Reset to previous theme
-        e.target.value = window.currentTheme || 'light';
     }
 }

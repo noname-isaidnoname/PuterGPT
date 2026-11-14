@@ -6,11 +6,11 @@ import { initializeTokenManagement } from './token-ui.js';
 import { migrateFromLocalStorage, db } from './indexeddb-storage.js';
 import { setState, subscribe, themeDefinitions } from './store.js';
 import { deepDiff } from './utils.js';
-import { populateThemeDropdown } from './theme-ui.js';
+import { renderThemeCards, syncThemeCards } from './theme-ui.js';
 import './search-ui.js'; // Initializes search UI globally
 import './theme-generator.js'; // Initialize theme generator
 import './code-runner.js'; // Initializes code runner modal (HTML/JS preview) globally
-import { loadCustomThemes, handleThemeSelectChange } from './theme-generator.js';
+import { loadCustomThemes } from './theme-generator.js';
 import { emit } from './event-bus.js';
 
 // Main Application Initialization
@@ -24,7 +24,7 @@ async function bootstrap() {
     await bootstrapThemes();
     await import('./state.js').then(m => m.loadSettingsFromDB());
     await initializeTokenManagement();
-    populateThemeDropdown();
+    renderThemeCards();
 
     wireReactiveSubscriptions();
     restoreConfigUI();
@@ -70,14 +70,8 @@ function syncConfigToUI(newState, prevState) {
     }
 
     if (newState.config?.theme !== prevState.config?.theme) {
-        if (els.themeSelect) els.themeSelect.value = newState.config.theme;
+        syncThemeCards();
         import('./state.js').then(m => m.applyTheme(newState.config.theme));
-    }
-
-    const deleteBtn = document.getElementById('delete-theme-btn');
-    if (deleteBtn) {
-        const isCustomTheme = newState.config?.theme?.startsWith('custom-');
-        deleteBtn.style.display = isCustomTheme ? 'block' : 'none';
     }
 
     updateSendButtonIcon(newState);
@@ -107,7 +101,7 @@ function restoreConfigUI() {
     els.systemPrompt.value = state.config.systemPrompt;
     els.autoScroll.checked = state.config.autoScroll;
     if (els.enableWebSearch) els.enableWebSearch.checked = state.config.enableWebSearch;
-    if (els.themeSelect) els.themeSelect.value = state.config.theme;
+    syncThemeCards();
 }
 
 function initializeEventListeners() {
@@ -135,10 +129,6 @@ function initializeEventListeners() {
         els.enableWebSearch.addEventListener('change', persistEnableWebSearch);
     }
 
-    if (els.themeSelect) {
-        els.themeSelect.addEventListener('change', handleThemeChange);
-    }
-
     if (els.themeModelSearch) {
         els.themeModelSearch.addEventListener('input', callFilterThemeModels);
     }
@@ -152,18 +142,6 @@ async function persistEnableWebSearch(e) {
         config: { ...state.config, enableWebSearch: e.target.checked }
     }));
     await db.settings.put({ key: 'enable_web_search', value: e.target.checked });
-}
-
-async function handleThemeChange(e) {
-    if (e.target.value === 'generate-custom') {
-        handleThemeSelectChange(e);
-        return;
-    }
-    setState((state) => ({
-        config: { ...state.config, theme: e.target.value }
-    }));
-    await db.settings.put({ key: 'theme', value: e.target.value });
-    import('./state.js').then(m => m.applyTheme(e.target.value));
 }
 
 function callFilterThemeModels() {

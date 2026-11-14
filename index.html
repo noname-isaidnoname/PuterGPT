@@ -121,6 +121,7 @@
     <link rel="stylesheet" href="css/input.css">
     <link rel="stylesheet" href="css/ui-elements.css">
     <link rel="stylesheet" href="css/modal.css">
+    <link rel="stylesheet" href="css/settings.css">
     <link rel="stylesheet" href="css/reasoning.css">
     <link rel="stylesheet" href="css/responsive.css">
     <link rel="stylesheet" href="css/animations.css">
@@ -274,96 +275,167 @@
 
     <!-- Settings Modal -->
     <div class="modal-overlay" id="settings-modal">
-        <div class="modal">
-            <h3>Settings & Configuration</h3>
-            
-            <div class="token-management-section">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                    <label>Token Management</label>
-                    <div style="display: flex; gap: 5px;">
-                        <button class="btn" style="font-size:0.7rem; padding:4px 8px;" onclick="showTokenGuide()" title="Token Guide">
-                            <span class="material-icons-outlined" style="font-size:14px">help</span> Guide
-                        </button>
-                        <button class="btn" style="font-size:0.7rem; padding:4px 8px;" onclick="importTokens()" title="Import Tokens">
-                            <span class="material-icons-outlined" style="font-size:14px">upload</span> Import
-                        </button>
-                        <button class="btn" style="font-size:0.7rem; padding:4px 8px;" onclick="exportTokens()" title="Export Tokens">
-                            <span class="material-icons-outlined" style="font-size:14px">download</span> Export
-                        </button>
-                    </div>
-                </div>
-                
-                <div class="token-add-section" style="margin-bottom: 15px; display: flex; flex-direction: column; gap: 8px;">
-                    <input type="text" id="token-name" placeholder="Token name (e.g., 'Main Account')" style="width:100%; font-size:0.8rem; padding:6px;">
-                    <input type="password" id="token-value" placeholder="Enter your Puter authentication token" style="width:100%; font-size:0.8rem; padding:6px;">
-                    <div style="display: flex; gap: 5px;">
-                        <button class="btn primary" id="add-token-btn" onclick="addToken()" style="flex: 1; font-size:0.75rem; padding:6px 8px; justify-content: center;">
-                            <span class="material-icons-outlined" style="font-size:14px">add</span> Add
-                        </button>
-                        <button class="btn" id="quick-register-btn" onclick="quickRegisterToken()" style="flex: 1; font-size:0.75rem; padding:6px 8px; background-color: var(--accent); color: #ffffff; border-color: transparent; justify-content: center;">
-                            <span class="material-icons-outlined" style="font-size:14px">flash_on</span> Quick Register (via Puter)
-                        </button>
-                    </div>
-                </div>
-
-                <div class="token-rotation-section" style="margin-bottom: 15px;">
-                    <label style="display:flex; align-items:center; gap:10px; cursor:pointer">
-                        <input type="checkbox" id="token-rotation" onchange="toggleTokenRotation()"> Enable Token Rotation
-                    </label>
-                    <small style="color:#888">Automatically switch to next token when current one fails or hits limits.</small>
-                </div>
-
-                <div class="token-list-section">
-                    <div style="font-size:0.8rem; font-weight:600; margin-bottom:5px; color:var(--text-secondary);">Active Tokens</div>
-                    <div id="token-list" class="token-list">
-                        <!-- Tokens will be injected here -->
-                        <div style="padding:10px; color:var(--text-secondary); font-size:0.8rem; font-style:italic;">No tokens added yet. Add your first token above!</div>
-                    </div>
-                </div>
+        <div class="modal settings-modal">
+            <div class="settings-header">
+                <h3>Settings</h3>
+                <button class="settings-close" onclick="closeSettings()" title="Close" aria-label="Close settings">
+                    <span class="material-icons-outlined">close</span>
+                </button>
             </div>
 
-            <hr style="border:0; border-top:1px solid var(--border-color); margin: 10px 0;">
-
-            <div class="select-group">
-                <label>AI Model</label>
-                <div style="display:flex; gap:5px; margin-bottom:5px;">
-                    <button class="btn" style="font-size:0.7rem; padding:4px; width:auto;" onclick="refreshModels()" title="Fetch Models">
-                        <span class="material-icons-outlined" style="font-size:14px">refresh</span> Refresh
+            <div class="settings-body">
+                <aside class="settings-sidebar" role="tablist" aria-label="Settings sections">
+                    <button class="settings-tab active" role="tab" aria-selected="true" data-tab="general" onclick="switchSettingsTab('general')">
+                        <span class="material-icons-outlined">tune</span> General
                     </button>
-                    <label style="display:flex; align-items:center; gap:5px; cursor:pointer; font-size:0.75rem; white-space:nowrap;">
-                        <input type="checkbox" id="free-only-filter"> Free only
-                    </label>
-                    <input type="text" id="model-search" placeholder="Search models..." style="font-size:0.8rem; padding:4px;">
+                    <button class="settings-tab" role="tab" aria-selected="false" data-tab="model" onclick="switchSettingsTab('model')">
+                        <span class="material-icons-outlined">smart_toy</span> Model
+                    </button>
+                    <button class="settings-tab" role="tab" aria-selected="false" data-tab="tokens" onclick="switchSettingsTab('tokens')">
+                        <span class="material-icons-outlined">key</span> Tokens
+                    </button>
+                    <button class="settings-tab" role="tab" aria-selected="false" data-tab="appearance" onclick="switchSettingsTab('appearance')">
+                        <span class="material-icons-outlined">palette</span> Appearance
+                    </button>
+                </aside>
+
+                <div class="settings-content">
+
+                    <!-- General Panel -->
+                    <section class="settings-panel active" id="settings-panel-general" role="tabpanel">
+                        <div class="settings-panel-header">
+                            <h4>General</h4>
+                            <p>Chat behavior and the assistant's personality.</p>
+                        </div>
+
+                        <div class="select-group">
+                            <label for="system-prompt">System Prompt</label>
+                            <textarea id="system-prompt" rows="4" placeholder="You are a helpful assistant."></textarea>
+                        </div>
+
+                        <div class="settings-toggle-row">
+                            <div class="settings-toggle-text">
+                                <span class="settings-toggle-label">Auto-scroll to bottom</span>
+                                <span class="settings-toggle-desc">Keep the transcript scrolled to the newest message while streaming.</span>
+                            </div>
+                            <label class="switch">
+                                <input type="checkbox" id="auto-scroll" checked>
+                                <span class="switch-track"></span>
+                            </label>
+                        </div>
+                    </section>
+
+                    <!-- Model Panel -->
+                    <section class="settings-panel" id="settings-panel-model" role="tabpanel">
+                        <div class="settings-panel-header">
+                            <h4>Model</h4>
+                            <p>Choose which AI model answers you and how it can reach the web.</p>
+                        </div>
+
+                        <div class="select-group">
+                            <label for="model-select">AI Model</label>
+                            <div style="display:flex; gap:5px; margin-bottom:5px;">
+                                <button class="btn" style="font-size:0.7rem; padding:4px; width:auto;" onclick="refreshModels()" title="Fetch Models">
+                                    <span class="material-icons-outlined" style="font-size:14px">refresh</span> Refresh
+                                </button>
+                                <label style="display:flex; align-items:center; gap:5px; cursor:pointer; font-size:0.75rem; white-space:nowrap;">
+                                    <input type="checkbox" id="free-only-filter"> Free only
+                                </label>
+                                <input type="text" id="model-search" placeholder="Search models..." style="font-size:0.8rem; padding:4px;">
+                            </div>
+                            <select id="model-select"></select>
+                            <div id="model-cost-display" class="model-cost-display" style="margin-top: 5px; font-size: 0.8rem; color: var(--text-secondary);"></div>
+                        </div>
+
+                        <div class="settings-toggle-row">
+                            <div class="settings-toggle-text">
+                                <span class="settings-toggle-label">Web search <span class="settings-badge">Experimental</span></span>
+                                <span class="settings-toggle-desc">Enable web-search capabilities for search-enabled models.</span>
+                            </div>
+                            <label class="switch">
+                                <input type="checkbox" id="enable-web-search">
+                                <span class="switch-track"></span>
+                            </label>
+                        </div>
+                    </section>
+
+                    <!-- Tokens Panel -->
+                    <section class="settings-panel" id="settings-panel-tokens" role="tabpanel">
+                        <div class="settings-panel-header">
+                            <h4>Tokens</h4>
+                            <p>Manage Puter authentication tokens and automatic rotation.</p>
+                        </div>
+
+                        <div class="token-management-section">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                <label>Token Management</label>
+                                <div style="display: flex; gap: 5px;">
+                                    <button class="btn" style="font-size:0.7rem; padding:4px 8px;" onclick="showTokenGuide()" title="Token Guide">
+                                        <span class="material-icons-outlined" style="font-size:14px">help</span> Guide
+                                    </button>
+                                    <button class="btn" style="font-size:0.7rem; padding:4px 8px;" onclick="importTokens()" title="Import Tokens">
+                                        <span class="material-icons-outlined" style="font-size:14px">upload</span> Import
+                                    </button>
+                                    <button class="btn" style="font-size:0.7rem; padding:4px 8px;" onclick="exportTokens()" title="Export Tokens">
+                                        <span class="material-icons-outlined" style="font-size:14px">download</span> Export
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="token-add-section" style="margin-bottom: 15px; display: flex; flex-direction: column; gap: 8px;">
+                                <input type="text" id="token-name" placeholder="Token name (e.g., 'Main Account')" style="width:100%; font-size:0.8rem; padding:6px;">
+                                <input type="password" id="token-value" placeholder="Enter your Puter authentication token" style="width:100%; font-size:0.8rem; padding:6px;">
+                                <div style="display: flex; gap: 5px;">
+                                    <button class="btn primary" id="add-token-btn" onclick="addToken()" style="flex: 1; font-size:0.75rem; padding:6px 8px; justify-content: center;">
+                                        <span class="material-icons-outlined" style="font-size:14px">add</span> Add
+                                    </button>
+                                    <button class="btn" id="quick-register-btn" onclick="quickRegisterToken()" style="flex: 1; font-size:0.75rem; padding:6px 8px; background-color: var(--accent); color: #ffffff; border-color: transparent; justify-content: center;">
+                                        <span class="material-icons-outlined" style="font-size:14px">flash_on</span> Quick Register (via Puter)
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="settings-toggle-row" style="margin-bottom: 15px;">
+                                <div class="settings-toggle-text">
+                                    <span class="settings-toggle-label">Token Rotation</span>
+                                    <span class="settings-toggle-desc">Automatically switch to the next token when the current one fails or hits limits.</span>
+                                </div>
+                                <label class="switch">
+                                    <input type="checkbox" id="token-rotation" onchange="toggleTokenRotation()">
+                                    <span class="switch-track"></span>
+                                </label>
+                            </div>
+
+                            <div class="token-list-section">
+                                <div style="font-size:0.8rem; font-weight:600; margin-bottom:5px; color:var(--text-secondary);">Active Tokens</div>
+                                <div id="token-list" class="token-list">
+                                    <!-- Tokens will be injected here -->
+                                    <div style="padding:10px; color:var(--text-secondary); font-size:0.8rem; font-style:italic;">No tokens added yet. Add your first token above!</div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Appearance Panel -->
+                    <section class="settings-panel" id="settings-panel-appearance" role="tabpanel">
+                        <div class="settings-panel-header">
+                            <h4>Appearance</h4>
+                            <p>Pick a theme for the app. You can also generate custom themes with the theme generator.</p>
+                        </div>
+
+                        <label class="settings-field-label">Theme</label>
+                        <div class="theme-cards" id="theme-cards">
+                            <!-- Theme cards (Light / Dark / custom + Generate) rendered by js/theme-ui.js -->
+                        </div>
+                        <button class="btn danger" onclick="deleteCustomTheme()" id="delete-theme-btn" style="display:none; margin-top: 12px;">Delete Current Theme</button>
+                    </section>
+
                 </div>
-                <select id="model-select"></select>
-                <div id="model-cost-display" class="model-cost-display" style="margin-top: 5px; font-size: 0.8rem; color: var(--text-secondary);"></div>
-                <label style="display:flex; align-items:center; gap:10px; cursor:pointer; margin-top: 10px;">
-                    <input type="checkbox" id="enable-web-search"> (Experimental) Enable web-search capabilities for search-enabled models
-                </label>
             </div>
 
-            <div class="select-group">
-                <label>System Prompt</label>
-                <textarea id="system-prompt" rows="3" placeholder="You are a helpful assistant."></textarea>
-            </div>
-
-            <div class="select-group">
-                <label>Theme</label>
-                <select id="theme-select">
-                    <!-- Theme options will be populated dynamically -->
-                </select>
-                <button class="btn danger" onclick="deleteCustomTheme()" id="delete-theme-btn" style="display:none;">Delete Theme</button>
-            </div>
-
-            <div class="select-group">
-                <label style="display:flex; align-items:center; gap:10px; cursor:pointer">
-                    <input type="checkbox" id="auto-scroll" checked> Auto-scroll to bottom
-                </label>
-            </div>
-
-            <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:20px;">
+            <div class="settings-footer">
                 <button class="btn" onclick="closeSettings()">Close</button>
-                <button class="btn" onclick="saveSettings()">Save</button>
+                <button class="btn primary" onclick="saveSettings()">Save</button>
             </div>
         </div>
     </div>
