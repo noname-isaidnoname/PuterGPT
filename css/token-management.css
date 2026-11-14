@@ -1,19 +1,19 @@
 /* Token Management Styles */
 .token-management-section {
-    margin-bottom: 20px;
+    margin-bottom: 8px;
 }
 
 .token-add-section {
-    background: var(--bg-secondary);
+    background: var(--bg-primary);
     padding: 12px;
-    border-radius: 8px;
+    border-radius: var(--radius-lg);
     border: 1px solid var(--border-color);
 }
 
 .token-rotation-section {
-    background: var(--bg-secondary);
-    padding: 12px;
-    border-radius: 8px;
+    background: var(--bg-primary);
+    padding: 10px 12px;
+    border-radius: var(--radius-lg);
     border: 1px solid var(--border-color);
 }
 
@@ -31,27 +31,26 @@
 .token-item {
     display: flex;
     align-items: center;
-    padding: 12px;
-    background: var(--bg-secondary);
+    padding: 10px 12px;
+    background: var(--bg-primary);
     border: 1px solid var(--border-color);
-    border-radius: var(--radius-md);
-    transition: all 0.2s ease;
+    border-radius: var(--radius-lg);
+    transition: border-color 0.15s ease;
     position: relative;
 }
 
 .token-item:hover {
-    border-color: var(--accent);
-    transform: translateY(-1px);
+    border-color: var(--border-strong);
 }
 
 .token-item.active {
     border-color: var(--accent);
-    background: rgba(16, 163, 127, 0.1);
+    background: var(--accent-soft);
 }
 
 .token-item.failed {
-    border-color: var(--danger);
-    background: rgba(220, 53, 69, 0.1);
+    border-color: var(--danger-border);
+    background: var(--danger-bg);
 }
 
 .token-info {
@@ -62,22 +61,24 @@
 .token-name {
     font-weight: 600;
     color: var(--text-primary);
-    margin-bottom: 4px;
+    margin-bottom: 2px;
     display: flex;
     align-items: center;
     gap: 8px;
+    font-size: 0.85rem;
 }
 
 .token-status {
-    font-size: 0.7rem;
-    padding: 2px 6px;
-    border-radius: 4px;
+    font-size: 0.68rem;
+    padding: 2px 7px;
+    border-radius: var(--radius-pill);
     font-weight: 500;
+    letter-spacing: 0.02em;
 }
 
 .token-status.healthy {
     background: var(--success);
-    color: white;
+    color: #06281c;
 }
 
 .token-status.failed {
@@ -86,31 +87,31 @@
 }
 
 .token-status.current {
-    background: var(--primary-color);
+    background: var(--accent);
     color: white;
 }
 
 .token-status.disabled {
-    background: #666;
-    color: white;
+    background: var(--text-caption);
+    color: var(--bg-primary);
 }
 
 .token-item.disabled {
     opacity: 0.6;
-    background: var(--bg-secondary);
 }
 
 .token-details {
-    font-size: 0.8rem;
+    font-size: 0.78rem;
     color: var(--text-secondary);
-    margin-top: 4px;
+    margin-top: 2px;
+    line-height: 1.4;
 }
 
 .token-actions {
     display: flex;
-    gap: 4px;
+    gap: 2px;
     opacity: 0;
-    transition: opacity 0.2s ease;
+    transition: opacity 0.15s ease;
 }
 
 .token-item:hover .token-actions {
@@ -122,37 +123,37 @@
     border: none;
     color: var(--text-secondary);
     cursor: pointer;
-    padding: 4px;
-    border-radius: 4px;
-    transition: all 0.2s ease;
+    padding: 6px;
+    border-radius: 6px;
+    transition: background-color 0.15s ease, color 0.15s ease;
     display: flex;
     align-items: center;
     justify-content: center;
 }
 
 .token-action-btn:hover {
-    background: var(--bg-hover);
+    background: var(--hover-light);
     color: var(--text-primary);
 }
 
 .token-action-btn.delete:hover {
-    background: var(--danger);
-    color: white;
+    background: var(--danger-bg);
+    color: var(--danger);
 }
 
 .token-action-btn.edit:hover {
-    background: var(--primary-color);
-    color: white;
+    background: var(--accent-soft);
+    color: var(--accent);
 }
 
 .token-action-btn.disable:hover {
-    background: #f59e0b;
-    color: white;
+    background: rgba(217, 119, 6, 0.12);
+    color: var(--warning);
 }
 
 .token-action-btn.enable:hover {
-    background: #10b981;
-    color: white;
+    background: rgba(16, 185, 129, 0.12);
+    color: var(--success);
 }
 
 /* Token statistics */
@@ -160,16 +161,17 @@
     display: flex;
     gap: 16px;
     margin-bottom: 12px;
-    padding: 8px;
-    background: var(--bg-secondary);
-    border-radius: 6px;
+    padding: 8px 12px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
     font-size: 0.8rem;
 }
 
 .token-stat {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 6px;
 }
 
 .token-stat-label {
@@ -189,22 +191,25 @@
 }
 
 .token-guide-content {
-    background: var(--bg-secondary);
+    background: var(--bg-primary);
     padding: 16px;
-    border-radius: 8px;
-    margin: 12px 0;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-color);
+    margin: 4px 0;
 }
 
 .token-guide-content h4 {
-    color: var(--primary-color);
+    color: var(--accent);
     margin-bottom: 8px;
 }
 
 .token-guide-content code {
-    background: var(--bg-tertiary);
-    padding: 2px 6px;
-    border-radius: 4px;
-    font-family: 'Courier New', monospace;
+    background: var(--code-bg);
+    border: 1px solid var(--code-border);
+    padding: 1px 6px;
+    border-radius: 5px;
+    font-family: var(--font-mono);
+    font-size: 0.82em;
 }
 
 /* Import/Export styles */
@@ -230,59 +235,35 @@
     align-items: center;
     gap: 4px;
     padding: 6px 12px;
-    background: var(--bg-secondary);
+    background: var(--bg-primary);
     border: 1px solid var(--border-color);
-    border-radius: 6px;
+    border-radius: var(--radius-md);
     cursor: pointer;
     font-size: 0.8rem;
-    transition: all 0.2s ease;
+    color: var(--text-primary);
+    transition: border-color 0.15s ease, background-color 0.15s ease;
 }
 
 .file-input-label:hover {
-    border-color: var(--primary-color);
-    background: var(--bg-hover);
-}
-
-/* Quick register button */
-.quick-register-btn {
-    background: linear-gradient(135deg, var(--primary-color), var(--primary-color-dark));
-    color: white;
-    border: none;
-    padding: 8px 16px;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 0.8rem;
-    font-weight: 500;
-    transition: all 0.2s ease;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
-.quick-register-btn:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(var(--primary-color-rgb), 0.3);
+    border-color: var(--accent);
+    background: var(--hover-light);
 }
 
 /* Responsive design */
 @media (max-width: 768px) {
-    .token-management-section {
-        margin-bottom: 16px;
-    }
-    
     .token-item {
         padding: 8px;
     }
-    
+
     .token-actions {
         opacity: 1;
     }
-    
+
     .token-stats {
         flex-wrap: wrap;
         gap: 8px;
     }
-    
+
     .import-export-section {
         flex-direction: column;
     }
@@ -292,7 +273,7 @@
 @keyframes tokenAdded {
     0% {
         opacity: 0;
-        transform: translateY(-10px);
+        transform: translateY(-8px);
     }
     100% {
         opacity: 1;
@@ -305,36 +286,29 @@
 }
 
 @keyframes tokenFailed {
-    0%, 100% {
-        transform: translateX(0);
-    }
-    25% {
-        transform: translateX(-5px);
-    }
-    75% {
-        transform: translateX(5px);
-    }
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-4px); }
+    75% { transform: translateX(4px); }
 }
 
 .token-item.failed {
-    animation: tokenFailed 0.5s ease-in-out;
+    animation: tokenFailed 0.4s ease-in-out;
 }
 
 /* Scrollbar styling for token list */
 .token-list::-webkit-scrollbar {
-    width: 6px;
+    width: var(--scrollbar-width);
 }
 
 .token-list::-webkit-scrollbar-track {
-    background: var(--bg-secondary);
-    border-radius: 3px;
+    background: transparent;
 }
 
 .token-list::-webkit-scrollbar-thumb {
-    background: var(--border-color);
+    background: var(--scrollbar-thumb);
     border-radius: 3px;
 }
 
 .token-list::-webkit-scrollbar-thumb:hover {
-    background: var(--text-secondary);
+    background: var(--scrollbar-thumb-hover);
 }

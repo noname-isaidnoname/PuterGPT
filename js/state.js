@@ -148,7 +148,22 @@ export function applyTheme(theme) {
     
     // Remove any existing theme attribute
     root.removeAttribute('data-theme');
-    
+    root.setAttribute('data-theme', theme === 'dark' ? 'dark' : 'light');
+
+    // Keep the syntax-highlight stylesheet in sync with the built-in themes
+    const hljsLink = document.getElementById('hljs-theme');
+    if (hljsLink) {
+        const darkHljs = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css';
+        const lightHljs = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css';
+        hljsLink.href = theme === 'dark' ? darkHljs : lightHljs;
+    }
+
+    // Keep the browser chrome color in sync
+    const themeColorMeta = document.querySelector('meta[name="theme-color"]');
+    if (themeColorMeta) {
+        themeColorMeta.content = theme === 'dark' ? '#151518' : '#ffffff';
+    }
+
     // Apply theme CSS variables if theme exists
     if (themeDefinitions[theme]) {
         const themeConfig = themeDefinitions[theme];
@@ -172,7 +187,7 @@ export function applyTheme(theme) {
     }
 }
 
-applyTheme('dark');
+applyTheme('light');
 
 // Async function to load settings from IndexedDB
 export async function loadSettingsFromDB() {
@@ -201,8 +216,8 @@ export async function loadSettingsFromDB() {
             }));
         }
         
-        // Always apply theme - use saved theme if exists, otherwise default to 'dark'
-        const themeToApply = savedTheme ? savedTheme.value : 'dark';
+        // Always apply theme - use saved theme if exists, otherwise default to 'light'
+        const themeToApply = savedTheme ? savedTheme.value : 'light';
         applyTheme(themeToApply);
 
         // Set original settings for comparison using the loaded values
@@ -213,14 +228,14 @@ export async function loadSettingsFromDB() {
                 autoScroll: savedScroll?.value !== undefined ? savedScroll.value : false,
                 tokenRotation: savedRotation?.value !== undefined ? savedRotation.value : false,
                 enableWebSearch: savedWebSearch?.value !== undefined ? savedWebSearch.value : false,
-                theme: savedTheme?.value || 'dark'
+                theme: savedTheme?.value || 'light'
             }
         });
     } catch (error) {
         console.error('Failed to load settings from DB:', error);
         
         // Apply default theme even when database loading fails
-        applyTheme('dark');
+        applyTheme('light');
         
         // Show user feedback for critical errors
         if (error.name === 'QuotaExceededError') {
@@ -287,7 +302,7 @@ export function hasSettingsChanged() {
     const currentAutoScroll = els.autoScroll.checked;
     const currentTokenRotation = els.tokenRotation.checked;
     const currentEnableWebSearch = els.enableWebSearch ? els.enableWebSearch.checked : false;
-    const currentTheme = els.themeSelect ? els.themeSelect.value : 'dark';
+    const currentTheme = els.themeSelect ? els.themeSelect.value : 'light';
     
     const currentState = getState();
     

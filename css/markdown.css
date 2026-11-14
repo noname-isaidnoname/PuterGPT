@@ -1,129 +1,198 @@
 /* Markdown Styles */
-.message-content pre, 
+.message-content pre,
 .message-content pre *,
 .message-content code,
-.message-content code * { 
-    font-family: 'Consolas', 'Monaco', 'Courier New', monospace !important; 
+.message-content code * {
+    font-family: var(--font-mono) !important;
 }
 
-.message-content pre { 
-    background: var(--bg-secondary); 
-    padding: 1rem; 
-    border-radius: var(--radius-md); 
-    margin: 12px 0; 
-    overflow-x: auto; 
-    border: 1px solid var(--border-color); 
+.message-content pre {
+    background: var(--pre-bg);
+    padding: 14px 16px;
+    margin: 0;
+    overflow-x: auto;
+    border: none;
+    font-size: 0.8rem;
+    line-height: 1.6;
 }
 
-.message-content code { 
-    font-size: 0.875rem;
+.message-content code {
+    font-size: 0.82rem;
 }
 
-.message-content p { 
-    margin-bottom: 12px; 
+.message-content :not(pre) > code {
+    background: var(--code-bg);
+    border: 1px solid var(--code-border);
+    border-radius: 6px;
+    padding: 2px 6px;
+    font-size: 0.82em;
+    color: var(--text-primary);
+}
+
+.message-content p {
+    margin-bottom: 12px;
     line-height: 1.75;
 }
 
-.message-content p:last-child { 
-    margin-bottom: 0; 
+.message-content p:last-child {
+    margin-bottom: 0;
 }
 
-.message-content blockquote { 
-    border-left: 3px solid var(--accent); 
-    padding-left: 16px; 
-    color: var(--text-secondary); 
-    margin: 16px 0; 
-    font-style: italic;
+.message-content h1,
+.message-content h2,
+.message-content h3,
+.message-content h4,
+.message-content h5,
+.message-content h6 {
+    margin: 20px 0 10px;
+    line-height: 1.35;
+    letter-spacing: -0.01em;
+    color: var(--text-primary);
 }
 
-/* Copy Button Styles */
-.code-block-wrapper {
-    position: relative;
-    margin: 10px 0;
+.message-content h1 { font-size: 1.5rem; font-weight: 700; }
+.message-content h2 { font-size: 1.3rem; font-weight: 700; }
+.message-content h3 { font-size: 1.15rem; font-weight: 600; }
+.message-content h4 { font-size: 1rem;     font-weight: 600; }
+
+.message-content ul,
+.message-content ol {
+    margin: 0 0 12px;
+    padding-left: 1.6em;
+}
+
+.message-content li {
+    margin: 4px 0;
+}
+
+.message-content a {
+    color: var(--link-color);
+    text-decoration: none;
+    text-decoration-skip-ink: auto;
+    border-bottom: 1px solid transparent;
+}
+
+.message-content a:hover {
+    color: var(--link-hover);
+    border-bottom-color: var(--link-hover);
+}
+
+.message-content hr {
     border: none;
+    border-top: 1px solid var(--border-color);
+    margin: 20px 0;
 }
 
-.copy-btn {
-    position: absolute;
-    top: 12px;
-    right: 12px;
-    background: var(--bg-secondary);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-sm);
+.message-content table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 14px 0;
+    font-size: 0.9rem;
+    display: block;
+    overflow-x: auto;
+}
+
+.message-content th,
+.message-content td {
+    border: 1px solid var(--table-border);
+    padding: 8px 12px;
+    text-align: left;
+}
+
+.message-content th {
+    background: var(--table-header-bg);
+    font-weight: 600;
+}
+
+.message-content tr:hover td {
+    background: var(--table-row-hover);
+}
+
+.message-content blockquote {
+    border-left: 3px solid var(--blockquote-border);
+    background: var(--blockquote-bg);
+    padding: 10px 16px;
+    border-radius: 0 var(--radius-md) var(--radius-md) 0;
+    color: var(--text-secondary);
+    margin: 14px 0;
+    font-style: normal;
+}
+
+.message-content blockquote p:last-child {
+    margin-bottom: 0;
+}
+
+.message-content img {
+    max-width: 100%;
+    border-radius: var(--radius-md);
+}
+
+/* Code Block Banner */
+.code-block-wrapper {
+    margin: 12px 0;
+    border: 1px solid var(--code-border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    background: var(--pre-bg);
+}
+
+.code-block-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 5px 6px 5px 14px;
+    background: var(--code-banner);
+    border-bottom: 1px solid var(--code-border);
+    user-select: none;
+}
+
+.code-block-lang {
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    color: var(--text-secondary);
+}
+
+.code-block-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.copy-btn,
+.run-btn {
+    background: transparent;
+    border: none;
+    border-radius: 6px;
     color: var(--text-secondary);
     cursor: pointer;
-    padding: 6px;
-    width: 32px;
-    height: 32px;
+    padding: 5px;
+    width: 28px;
+    height: 28px;
     display: flex;
     align-items: center;
     justify-content: center;
-    opacity: 0.7;
-    transition: all 0.2s ease;
-    z-index: 5;
+    transition: background-color 0.15s ease, color 0.15s ease;
 }
 
-.copy-btn:hover {
-    background: var(--text-primary);
-    border-color: var(--text-primary);
-    color: var(--bg-primary);
-    opacity: 1;
+.copy-btn:hover,
+.run-btn:hover {
+    background: var(--hover-light);
+    color: var(--text-primary);
 }
 
 .copy-btn.copied {
-    background: #22c55e;
-    border-color: #22c55e;
-    color: white;
-    opacity: 1;
-}
-
-.copy-btn .material-icons-outlined {
-    font-size: 16px;
-    line-height: 1;
-}
-
-/* Override existing pre margin to account for wrapper */
-.code-block-wrapper pre {
-    margin: 0;
-}
-
-/* Run Button Styles (sits to the left of the copy button).
-   All values are sourced from `js/store.js` via CSS variables. */
-.run-btn {
-    position: absolute;
-    top: var(--runner-btn-top);
-    right: var(--runner-btn-right);
-    background: var(--runner-btn-bg-idle);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-sm);
-    color: var(--runner-btn-color-idle);
-    cursor: pointer;
-    padding: 6px;
-    width: var(--runner-btn-size);
-    height: var(--runner-btn-size);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    opacity: var(--runner-btn-opacity-idle);
-    transition: all 0.2s ease;
-    z-index: 5;
-}
-
-.run-btn:hover {
-    background: var(--runner-btn-bg-hover);
-    border-color: var(--runner-btn-border-hover);
-    color: var(--runner-btn-color-hover);
-    opacity: var(--runner-btn-opacity-hover);
+    color: var(--success);
 }
 
 .run-btn.running {
-    background: var(--runner-btn-bg-hover);
-    border-color: var(--runner-btn-border-hover);
-    color: var(--runner-btn-color-hover);
-    opacity: var(--runner-btn-opacity-hover);
+    color: var(--accent);
 }
 
+.copy-btn .material-icons-outlined,
 .run-btn .material-icons-outlined {
-    font-size: var(--runner-btn-icon-size);
+    font-size: 16px;
     line-height: 1;
 }

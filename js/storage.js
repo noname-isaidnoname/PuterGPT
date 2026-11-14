@@ -58,7 +58,7 @@ export async function loadSavedChats() {
     els.savedChatsContainer.innerHTML = '';
     
     if (chats.length === 0) {
-        els.savedChatsContainer.innerHTML = '<div style="padding:10px; color:var(--text-secondary); font-size:0.8rem; font-style:italic;">No saved chats yet.</div>';
+        els.savedChatsContainer.innerHTML = '<div class="saved-chats-empty">No saved chats yet.</div>';
         return;
     }
 

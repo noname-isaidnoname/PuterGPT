@@ -210,7 +210,7 @@ window.openSettings = () => {
         autoScroll: els.autoScroll.checked,
         tokenRotation: els.tokenRotation.checked,
         enableWebSearch: els.enableWebSearch ? els.enableWebSearch.checked : false,
-        theme: els.themeSelect ? els.themeSelect.value : 'dark'
+        theme: els.themeSelect ? els.themeSelect.value : 'light'
     };
     setState({ originalSettings: currentSettings });
 };
@@ -339,16 +339,16 @@ window.confirmDeleteTheme = async () => {
         await db.settings.put({ key: 'customThemes', value: savedThemes.value });
     }
     
-    // Reset to dark theme
+    // Reset to light theme
     const { setState } = await import('./store.js');
     setState((state) => ({
-        config: { ...state.config, theme: 'dark' }
+        config: { ...state.config, theme: 'light' }
     }));
-    await db.settings.put({ key: 'theme', value: 'dark' });
+    await db.settings.put({ key: 'theme', value: 'light' });
     
-    // Apply dark theme
+    // Apply light theme
     const { applyTheme } = await import('./state.js');
-    applyTheme('dark');
+    applyTheme('light');
     
     // Update dropdown
     const { populateThemeDropdown } = await import('./theme-ui.js');

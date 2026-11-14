@@ -36,6 +36,7 @@ async function bootstrap() {
     initializeImageHandling();
     initializeImportHandling();
     initializeEventListeners();
+    initializeWelcomeMode();
 
     // Check for shared chat URL
     import('./export.js').then(m => m.loadSharedChat());
@@ -98,7 +99,7 @@ function updateSendButtonIcon(currentState) {
         currentState.messages.some(m => m.role === 'assistant' && m.content === '');
     const sendBtnIcon = els.sendBtn.querySelector('.material-icons-outlined');
     if (sendBtnIcon) {
-        sendBtnIcon.textContent = isGenerating ? 'stop' : 'send';
+        sendBtnIcon.textContent = isGenerating ? 'stop' : 'arrow_upward';
     }
 }
 
@@ -185,6 +186,16 @@ window.handleSendButtonClick = () => {
         sendMessage();
     }
 };
+
+// Toggles the centered welcome view while the conversation is empty
+function initializeWelcomeMode() {
+    const main = document.getElementById('main');
+    const sync = () => {
+        main.classList.toggle('welcome-mode', els.chatContainer.children.length === 0);
+    };
+    new MutationObserver(sync).observe(els.chatContainer, { childList: true });
+    sync();
+}
 
 // Import and make abortAssistantResponse available globally
 import('./chat-api.js').then(m => {

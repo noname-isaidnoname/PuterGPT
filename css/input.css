@@ -1,105 +1,135 @@
 /* Input Area */
-#input-area { 
-    position: absolute; 
-    bottom: 0; 
-    left: 0; 
-    right: 0; 
-    background: linear-gradient(180deg, var(--gradient-start), var(--bg-primary) 50%); 
-    padding: 1.5rem 1.5rem 2.5rem 1.5rem; 
-    display: flex; 
+#input-area {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(180deg, var(--gradient-start) 0%, var(--bg-primary) 40%, var(--bg-primary) 100%);
+    padding: 0.75rem 1.5rem 0.75rem 1.5rem;
+    display: flex;
     flex-direction: column;
-    align-items: center; 
+    align-items: center;
     z-index: 10;
+    pointer-events: none;
 }
 
-.input-wrapper { 
-    width: 100%; 
-    max-width: 768px; 
-    background-color: var(--input-bg); 
-    border-radius: var(--input-border-radius); 
-    border: 1px solid var(--border-color); 
-    box-shadow: var(--shadow-md); 
-    display: flex; 
-    position: relative; 
+#input-area > * {
+    pointer-events: auto;
+}
+
+.input-wrapper {
+    width: 100%;
+    max-width: calc(var(--content-max-width) - 88px);
+    background-color: var(--input-bg);
+    border-radius: var(--input-border-radius);
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-input);
+    display: flex;
+    flex-direction: column;
+    position: relative;
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    overflow: hidden;
 }
 
 .input-wrapper:focus-within {
-    border-color: var(--focus-border);
+    border-color: var(--border-strong);
+    box-shadow: var(--shadow-input), 0 0 0 3px var(--accent-soft);
 }
 
-textarea { 
-    background: transparent; 
-    border: none; 
-    color: var(--text-primary); 
-    padding: 12px 52px 12px 20px; 
-    resize: none; 
-    min-height: 100px;
-    max-height: 200px; 
-    font-size: 1rem; 
-    outline: none; 
-    width: 100%; 
-    line-height: 1.5;
-}
-
-#send-btn { 
-    position: absolute; 
-    bottom: 8px; 
-    right: 8px; 
-    background: var(--text-primary); 
-    border: none; 
-    color: var(--bg-primary); 
-    cursor: pointer; 
-    width: 32px;
-    height: 32px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 50%; 
-    transition: transform 0.2s ease, opacity 0.2s ease; 
-}
-
-#send-btn:hover { 
-    transform: scale(1.05);
-    opacity: 0.9;
-}
-
-#image-btn {
-    position: absolute;
-    bottom: 8px;
-    right: 52px;
+#user-input {
     background: transparent;
     border: none;
-    color: var(--text-secondary);
+    color: var(--text-primary);
+    padding: 16px 18px 8px 18px;
+    resize: none;
+    min-height: 54px;
+    max-height: 200px;
+    font-size: 1rem;
+    outline: none;
+    width: 100%;
+    line-height: 1.5;
+    font-family: var(--font-sans);
+}
+
+#user-input::placeholder {
+    color: var(--text-caption);
+    user-select: none;
+}
+
+/* Function row: chips left, send right */
+.input-function-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 12px 12px;
+}
+
+.input-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 34px;
+    padding: 0 14px;
+    border-radius: var(--radius-pill);
+    border: 1px solid var(--border-color);
+    background: transparent;
+    color: var(--text-primary);
+    font-size: 13px;
+    font-weight: 500;
     cursor: pointer;
-    width: 32px;
-    height: 32px;
+    transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+    user-select: none;
+}
+
+.input-chip:hover {
+    background: var(--hover-light);
+}
+
+.input-chip.selected {
+    background: var(--accent-soft);
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.input-chip .material-icons-outlined {
+    font-size: 18px;
+}
+
+#send-btn {
+    background: var(--accent);
+    border: none;
+    color: #ffffff;
+    cursor: pointer;
+    width: 34px;
+    height: 34px;
     display: flex;
     align-items: center;
     justify-content: center;
     border-radius: 50%;
-    transition: background-color 0.2s ease, color 0.2s ease;
+    transition: background-color 0.2s ease, transform 0.15s ease;
+    margin-left: auto;
+    flex-shrink: 0;
 }
 
-#image-btn:hover {
-    background-color: var(--hover-light);
-    color: var(--text-primary);
+#send-btn:hover {
+    background: var(--accent-hover);
 }
 
-#image-btn .material-icons-outlined {
-    font-size: 18px;
+#send-btn:active {
+    transform: scale(0.94);
 }
 
+#send-btn .material-icons-outlined {
+    font-size: 20px;
+}
+
+/* Image attachments strip */
 .image-preview {
-    max-width: 768px;
-    margin: 8px auto 0 auto;
-    padding: 8px;
-    border-radius: var(--radius-md);
-    background: var(--bg-secondary);
-    border: 1px solid var(--border-color);
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
+    padding: 12px 14px 0;
 }
 
 .image-item {
@@ -108,19 +138,20 @@ textarea {
 }
 
 .image-item img {
-    width: 80px;
-    height: 80px;
+    width: 64px;
+    height: 64px;
     object-fit: cover;
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-md);
     border: 1px solid var(--border-color);
+    display: block;
 }
 
 .image-item .remove-image {
     position: absolute;
-    top: -8px;
-    right: -8px;
-    background: var(--danger);
-    color: white;
+    top: -7px;
+    right: -7px;
+    background: var(--text-primary);
+    color: var(--bg-primary);
     border: none;
     border-radius: 50%;
     width: 20px;
@@ -129,10 +160,33 @@ textarea {
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    font-size: 12px;
+    font-size: 11px;
     line-height: 1;
+    transition: background-color 0.15s ease;
 }
 
 .image-item .remove-image:hover {
-    background: var(--danger-hover);
+    background: var(--danger);
+    color: #fff;
+}
+
+/* Footer caveat */
+.puter-footer {
+    width: 100%;
+    max-width: calc(var(--content-max-width) - 88px);
+    padding: 6px 0 2px;
+    font-size: 11px;
+    line-height: 16px;
+    color: var(--text-caption);
+    text-align: center;
+    user-select: none;
+}
+
+.puter-footer a {
+    color: var(--link-color);
+    text-decoration: none;
+}
+
+.puter-footer a:hover {
+    text-decoration: underline;
 }

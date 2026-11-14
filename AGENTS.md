@@ -1,0 +1,114 @@
+# AGENTS.md
+
+PuterGPT — a browser-based AI chat client for [Puter.ai](https://puter.ai) models. Static HTML/CSS/vanilla JS. **No build step, no server, no package.json.** The deployed site is served as-is from this directory (GitHub Pages), and the same files run fine off `python3 -m http.server`.
+
+Everything lives in one big `index.html`; there is no bundler, no TypeScript, no lint/test harness. Keep it that way unless the user asks for tooling.
+
+## Project map — which file owns what
+
+Plain ES modules loaded with `<script type="module" src="js/app.js">`. Globals referenced by inline `onclick="…"` handlers are attached to `window` explicitly (`window.newChat`, `window.openSettings`, `window.sendMessage`, `window.enterEditMode`, …) — keep that pattern working or remove the inline handlers.
+
+| file | owns |
+| --- | --- |
+| `index.html` | the whole skeleton: sidebar, welcome view, `#input-area`, settings / settings-confirm / code-runner / delete-theme / theme-generator modals, context menu, toast container, and the **default (light) `:root` CSS variables inlined in a `<style>` block** (mirrored from `js/store.js` — see Theming) |
+| `css/*.css` | one concern each, linked from `index.html`: base (body, selection, focus ring), sidebar, chat (message column, welcome view, `.msg-footer`), input (floating composer), markdown (code blocks + banner), message-actions (edit UI), ui-elements (buttons, inputs, labels), modal, reasoning, responsive, animations (typing dots, toasts), token-management, search |
+| `js/app.js` | entry point; `bootstrap()` order matters: migrate → `bootstrapThemes()` → settings → token mgmt → `populateThemeDropdown()` → subscriptions → `loadSavedChats()` → `loadModels()` (network) → image/import/listeners → `initializeWelcomeMode()` (**last** — sets `#main.welcome-mode` synchronously, so it doubles as "app booted") |
+| `js/state.js` | `applyTheme()` (sets inline vars on `<html>`, `data-theme`, swaps the highlight.js `<link id="hljs-theme">` between `github.min.css`/`github-dark.min.css`, sets `meta theme-color`), loads settings from IndexedDB (`loadSettingsFromDB`), Proxy-backed `state` export |
+| `js/store.js` | tiny Zustand-like store (`setState`/`getState`/`subscribe`) + `themeDefinitions` (built-in `light`, `dark`, plus `custom-*` merged in at runtime). Holds the canonical light/dark variable sets |
+| `js/chat.js` | input handling, `sendMessage()`, image attach, `resizeInput()` |
+| `js/chat-api.js` | streaming responses from the Puter.ai API (`api.puter.com`), token rotation hooks, `triggerAssistantResponse()`, abort |
+| `js/chat-ui.js` | `renderMessage()` (the message DOM), `decorateCodeBlocks()` (adds the `.code-block-header` banner with language label + copy/Run buttons), `reRenderAllMessages()` |
+| `js/chat-edit.js` | edit mode: `window.enterEditMode(index)`, save / save+regenerate / cancel |
+| `js/token-manager.js`, `js/token-ui*.js` | token vault, rotation, list UI, quick-register |
+| `js/storage.js`, `js/indexeddb-storage.js` | persistence: IndexedDB **'PuterGPT'** via Dexie — stores `chats`, `tokens`, `settings`. One-off migration of legacy `puter_*` localStorage keys runs on boot |
+| `js/theme-generator.js`, `js/theme-ui.js` | AI/custom themes: prompts, JS-effects execution (`executeThemeJS`), dropdown population |
+| `js/models.js`, `js/compression.js` | model list + pricing; lz-string compression for share links |
+| `js/search.js`, `js/search-ui.js` | full-text search modal (Ctrl+Shift+F / button) |
+| `js/event-bus.js` | pub/sub (`on`, `emit`) — **listener exceptions are caught and logged as `console.error('[event-bus] …')`, never thrown** |
+| `js/ui.js` | toasts, context menu, saved-theme delete/reset helpers |
+| `js/code-runner.js` | sandboxed JS/HTML preview modal |
+
+## Theming — two files must stay in sync
+
+Custom properties are the whole theme system (built-ins `light` = default, `dark`, plus runtime `custom-*` themes). When you add or rename a variable:
+
+1. add it to the inline `<style>:root` block in `index.html` (the light defaults used before JS runs),
+2. add it to **both** `themeDefinitions.light.cssVars` and `themeDefinitions.dark.cssVars` in `js/store.js`.
+
+`applyTheme()` sets every var as an inline `style` on `<html>`, so dedicated dark selectors don't exist — components must use variables only, never hardcoded mode colors. `--content-max-width`, `--content-padding-horizontal` drive the message column and composer width.
+
+## State & reactivity
+
+`state` is a **Proxy** delegating to `getState()` — always read `state.x` fresh; never cache the proxy itself. For UI updates, `subscribe(syncConfigToUI)` in `app.js` syncs config → DOM; messages flow through `emit('message:append')` / `emit('messages:rerender')`. `reRenderAllMessages()` clears and rebuilds `#chat-container`; a MutationObserver in `initializeWelcomeMode()` watches the container and toggles `#main.welcome-mode`, which shows the centered `#welcome-view` and hides the transcript.
+
+## Message markup contract (easy to break)
+
+- `renderMessage()` output: `<div class="message user|assistant"><div class="message-wrapper"><div class="message-content">…</div><div class="msg-footer">…edit button…</div></div></div>`
+- user bubbles use `.user-bubble` (no `.rendered-content`); assistant output uses `.rendered-content`. **Anything that assumes `.rendered-content` exists will throw on user messages** — `decorateCodeBlocks` and edit-mode already account for this; keep the guards.
+- `.msg-footer` (edit/copy buttons) is `opacity: 0` until `.message:hover` (forced visible ≤768px).
+- Streaming: the typing indicator renders `.typing-indicator` with three `.dot`s; cost badges (`.message-cost`) and reasoning pills (`.reasoning-block`) are built inline in `chat-ui.js` — both take the content path.
+
+## Verification
+
+**No test suite exists.** Verify in a real browser (or with Lightpanda) instead of eyeballing the diff. Serve first:
+
+```bash
+python3 -m http.server 8765
+```
+
+### Installing the verification tools — ask first
+
+Don't assume `lightpanda` or Playwright exists on the machine. **If the tools below are missing, ask the user before installing anything** (use the question/ask tool of whatever harness you're running; if none exists, just ask in your reply). Downloading a browser engine is not something to do silently on someone's machine. Check first:
+
+```bash
+command -v lightpanda        # e.g. ~/.local/bin/lightpanda
+command -v python3
+ls ~/.cache/ms-playwright    # playwright browsers, if any
+```
+
+- **Lightpanda** — headless browser (Zig, no graphical engine) from <https://github.com/lightpanda-io/browser>. Install the x86_64 Linux nightly (arm64/macOS links on the releases page):
+
+  ```bash
+  mkdir -p ~/.local/bin
+  curl -L -o ~/.local/bin/lightpanda https://github.com/lightpanda-io/browser/releases/download/nightly/lightpanda-x86_64-linux
+  chmod a+x ~/.local/bin/lightpanda
+  lightpanda version
+  ```
+
+  No sudo is needed; don't ask for one. Set `LIGHTPANDA_DISABLE_TELEMETRY=true` for runs — it collects usage telemetry by default. Linux release builds need glibc ≥ 2.35.
+
+  Usage: `lightpanda fetch --dump html --wait-ms 3000 URL` for a rendered-DOM dump (modals hidden by CSS still appear in text dumps) · `lightpanda run script.js` for a PandaScript (`new Page()` + `goto`/`click`/`fill`/`evaluate`/`waitForScript`) · `lightpanda serve --port 9222` then speak raw CDP from Node if you need real clicks and console capture. Quirks:
+  - **No graphical engine** — `--dump png` is a text-only rendering; `getComputedStyle` doesn't apply author CSS reliably. It checks structure and JS, not looks.
+  - Its `click` only fires on "interactive" (button-like) elements — `.chat-item` is a `<div onclick>`, so dispatch with `page.evaluate("document.querySelector('.chat-item').click()")` or use Playwright.
+  - `MutationObserver` callbacks race your next `waitForScript`/`click`; wait for the state itself, not for the injection call.
+- **Playwright Chromium** — how screenshots and real computed-style checks are done. Keep the tooling out of this repo (it has no package.json and must stay that way): work from a scratch dir like `/tmp`.
+
+  ```bash
+  mkdir -p /tmp/ui-verify && cd /tmp/ui-verify
+  npm init -y && npm i playwright-core
+  npx playwright install chromium     # ~120 MB into ~/.cache/ms-playwright
+  ```
+
+  Then `require('playwright-core')` and point `chromium.launch({ executablePath })` at the downloaded shell under `~/.cache/ms-playwright/`. Hover `.message` (and wait ~0.5 s) before asserting `.msg-footer` opacity.
+
+- Boot success marker: `document.getElementById('main').classList.contains('welcome-mode') === true` (empty chat) or `theme-select` populated — both happen at the end of `bootstrap()`; earlier checks race it (`loadModels()` network call gates it).
+- **Zero console/pageerror output is expected** across a full seed → open chat → edit → save → theme-switch cycle; the `loading state` is not acceptable as "it's fine".
+- If you touch the token/rotation, model list, or anything hitting `api.puter.com`, expect a live network dependency.
+
+## Gotchas
+
+- Built-in theme changes go in **both** `index.html` and `js/store.js` (see Theming) — one without the other ships broken half-themes.
+- Don't reuse variable names for JS-inline styles without checking who else reads them (`--input-bg`, `--border-color`, `--radius-sm` are read by JS-injected HTML).
+- `reRenderAllMessages` re-creates every message; don't rely on element identity across rerenders.
+- `marked`, `hljs`, `Dexie`, `lz-string` are CDN/global scripts (no imports); `hljs` loads `github.min.css` by default and `applyTheme()` swaps it for dark.
+- Inline `style="…"` on some buttons/inputs is deliberate legacy; converting to classes is fine if you keep the `id`s.
+- `preferences`-dependent JS (token order, rotation) lives in `localStorage` (`puter_tokens` etc.) only until the first migration to IndexedDB.
+- This repo is also deployed straight to websim.com (the footer script in `index.html` detects an iframe host) — don't break `window.location.ancestorOrigins` logic or the `id="puter-footer"` hook.
+
+## Commit conventions
+
+Short imperative summaries (`redesign: …` is fine). No attribution of tools/models in commit messages or code comments. Only commit what the user asked to be committed; the working tree should stay clean of scratch files (no `.fallow/`, `node_modules`, screenshots — none of those belong in this repo). When in doubt about unrelated changes in the working tree, leave them alone.
+
+## Updating this file
+
+If you learn something the next agent would rediscover the hard way — a platform quirk, a verification trap, a file that owns an unexpected behavior — write it down here in the same change. Keep it accurate; wrong notes are worse than missing ones.

@@ -1,77 +1,3 @@
-/* Message Actions Area */
-.message-actions {
-    position: absolute;
-    top: 45px;
-    left: 10px;
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-    opacity: 0;
-    transition: opacity 0.2s;
-    background: var(--bg-secondary);
-    padding: 4px;
-    border-radius: var(--radius-sm);
-    z-index: 10;
-    border: 1px solid var(--border-color);
-}
-
-.avatar-wrapper {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 5px;
-    position: relative;
-}
-
-.avatar-actions {
-    position: static;
-    display: flex;
-    flex-direction: column;
-    opacity: 0;
-    transition: opacity 0.2s;
-    background: var(--bg-secondary);
-    padding: 4px;
-    border-radius: var(--radius-sm);
-    z-index: 10;
-    border: 1px solid var(--border-color);
-}
-
-.avatar-wrapper:hover .avatar-actions,
-.message:hover .avatar-actions {
-    opacity: 1;
-}
-
-.action-btn {
-    background: transparent;
-    border: none;
-    color: var(--text-secondary);
-    cursor: pointer;
-    padding: 2px;
-    border-radius: 2px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    position: relative;
-}
-
-.action-btn::before {
-    content: '';
-    position: absolute;
-    top: -6px;
-    left: -6px;
-    right: -6px;
-    bottom: -6px;
-}
-
-.action-btn:hover { 
-    background: rgba(255,255,255,0.1); 
-    color: var(--text-primary); 
-}
-
-.message:hover .message-actions {
-    opacity: 1;
-}
-
 /* Edit Mode UI */
 .edit-container {
     display: flex;
@@ -79,8 +5,15 @@
     gap: 8px;
     background: var(--bg-secondary);
     padding: 12px;
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-lg);
     border: 1px solid var(--border-color);
+    width: 100%;
+    max-width: 100%;
+}
+
+.message.user .edit-container {
+    border-radius: 20px;
+    border-bottom-right-radius: 6px;
 }
 
 .edit-textarea {
@@ -88,23 +21,30 @@
     background: var(--input-bg);
     color: var(--text-primary);
     border: 1px solid var(--border-color);
-    border-radius: var(--radius-sm);
-    padding: 10px;
+    border-radius: var(--radius-md);
+    padding: 10px 12px;
     min-height: 60px;
     resize: vertical;
     outline: none;
     font-family: var(--font-sans);
+    font-size: 0.95rem;
+    line-height: 1.5;
 }
 
-.edit-controls { 
-    display: flex; 
-    gap: 8px; 
-    justify-content: flex-end; 
+.edit-textarea:focus {
+    border-color: var(--input-focus-border);
+    box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
-.edit-controls .btn { 
-    width: auto; 
-    padding: 6px 12px; 
-    font-size: 0.8rem; 
-    justify-content: center; 
+.edit-controls {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+.edit-controls .btn {
+    width: auto;
+    padding: 6px 14px;
+    font-size: 0.8rem;
+    justify-content: center;
 }

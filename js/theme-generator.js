@@ -653,6 +653,6 @@ export function handleThemeSelectChange(e) {
     if (e.target.value === 'generate-custom') {
         openThemeGenerator();
         // Reset to previous theme
-        e.target.value = window.currentTheme || 'dark';
+        e.target.value = window.currentTheme || 'light';
     }
 }

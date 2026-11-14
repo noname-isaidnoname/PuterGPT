@@ -1,35 +1,46 @@
 /* Settings Modal */
-.modal-overlay { 
-    position: fixed; 
-    top: 0; 
-    left: 0; 
-    right: 0; 
-    bottom: 0; 
-    background: var(--modal-overlay); 
-    display: flex; 
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--modal-overlay);
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+    display: flex;
     align-items: center;
     justify-content: center;
     opacity: 0;
     pointer-events: none;
-    transition: opacity 0.3s ease;
+    transition: opacity 0.25s ease;
     z-index: 1000;
 }
 
-.modal-overlay.active { 
-    opacity: 1; 
-    pointer-events: auto; 
+.modal-overlay.active {
+    opacity: 1;
+    pointer-events: auto;
 }
 
-.modal { 
-    background-color: var(--bg-secondary); 
-    padding: 2rem; 
-    border-radius: var(--radius-lg); 
-    width: 90%; 
-    max-width: 600px; 
-    max-height: 80vh; 
-    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+.modal {
+    background-color: var(--bg-secondary);
+    padding: 24px 28px;
+    border-radius: var(--radius-xl);
+    width: 90%;
+    max-width: 600px;
+    max-height: 80vh;
+    box-shadow: var(--shadow-lg);
     border: 1px solid var(--border-color);
     overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    transform: translateY(8px) scale(0.98);
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.modal-overlay.active .modal {
+    transform: none;
 }
 
 /* Custom scrollbar for settings modal */
@@ -38,79 +49,59 @@
 }
 
 .modal::-webkit-scrollbar-track {
-    background: var(--bg-primary);
-    border-radius: 4px;
+    background: transparent;
     margin: 8px;
 }
 
 .modal::-webkit-scrollbar-thumb {
-    background: var(--border-color);
+    background: var(--scrollbar-thumb);
     border-radius: 4px;
-    transition: background-color 0.2s ease;
 }
 
 .modal::-webkit-scrollbar-thumb:hover {
-    background: var(--text-secondary);
+    background: var(--scrollbar-thumb-hover);
 }
 
-.modal::-webkit-scrollbar-thumb:active {
-    background: var(--text-primary);
-}
-
-.modal h3 { 
-    margin-bottom: 1.5rem; 
-    font-size: 1.25rem;
+.modal h3 {
+    margin: 0 0 4px;
+    font-size: 1.1rem;
     font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--text-primary);
 }
 
-.select-group { 
-    margin-bottom: 1.5rem; 
+.select-group {
+    margin-bottom: 14px;
 }
 
-.select-group label { 
-    display: block; 
-    margin-bottom: 0.5rem; 
-    font-size: 0.875rem; 
+.select-group label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 0.8rem;
     color: var(--text-secondary);
     font-weight: 500;
 }
 
-select, input[type="text"], input[type="password"] { 
-    width: 100%; 
-    padding: 10px 12px; 
-    border-radius: var(--radius-md); 
-    border: 1px solid var(--border-color); 
-    background-color: var(--input-bg); 
-    color: var(--text-primary); 
-    font-size: 0.875rem;
-    transition: border-color 0.2s ease;
-}
-
-select:focus, input[type="text"]:focus, input[type="password"]:focus {
-    border-color: var(--focus-border);
-    outline: none;
-}
-
-.modal { 
-    display: flex; 
-    flex-direction: column; 
-    gap: 15px; 
-    overflow-y: auto;
+.select-group small {
+    line-height: 1.5;
 }
 
 /* Settings Confirmation Modal */
-#settings-confirm-modal .modal {
+#settings-confirm-modal .modal,
+#delete-theme-modal .modal {
     max-width: 400px;
-    padding: 20px;
+    padding: 22px 24px;
 }
 
-#settings-confirm-modal p {
-    margin-bottom: 20px;
+#settings-confirm-modal p,
+#delete-theme-modal p {
+    margin-bottom: 12px;
     color: var(--text-secondary);
+    font-size: 0.9rem;
+    line-height: 1.5;
 }
 
-/* Code Runner Modal.
-   All values are sourced from `js/store.js` via CSS variables. */
+/* Code Runner Modal */
 .code-runner-modal {
     max-width: var(--runner-modal-max-width);
     width: var(--runner-modal-width);
@@ -129,6 +120,7 @@ select:focus, input[type="text"]:focus, input[type="password"]:focus {
     padding: var(--runner-modal-header-pad);
     border-bottom: 1px solid var(--border-color);
     flex-shrink: 0;
+    background: var(--bg-sidebar);
 }
 
 .code-runner-header h3 {
@@ -144,9 +136,15 @@ select:focus, input[type="text"]:focus, input[type="password"]:focus {
 }
 
 .code-runner-header-actions .action-btn {
+    background: transparent;
     color: var(--text-secondary);
     padding: 6px;
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-md);
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 .code-runner-header-actions .action-btn:hover {

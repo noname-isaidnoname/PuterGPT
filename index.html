@@ -3,78 +3,112 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#ffffff">
     <title>PuterGPT</title>
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js"></script>
     <script src="https://unpkg.com/dexie/dist/dexie.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
-    
-    <!-- Default theme CSS variables - defined here so they exist before any JavaScript runs -->
+    <link rel="stylesheet" id="hljs-theme" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+
+    <!-- Default theme CSS variables (light) - defined here so they exist before any JavaScript runs -->
     <style>
         :root {
-            --bg-primary: #0d0d0d;
-            --bg-secondary: #171717;
-            --bg-sidebar: #000000;
-            --text-primary: #f2f2f2;
-            --text-secondary: #a6a6a6;
-            --border-color: #2f2f2f;
-            --input-bg: #1a1a1a;
-            --user-msg-bg: transparent;
-            --ai-msg-bg: #171717;
+            --bg-primary: #ffffff;
+            --bg-secondary: #f5f6f8;
+            --bg-sidebar: #f9fafb;
+            --bg-tertiary: #f5f6f8;
+            --secondary-bg: #f5f6f8;
+            --text-primary: #0f1115;
+            --text-secondary: #61666b;
+            --text-caption: #9ca3af;
+            --border-color: #e3e6ea;
+            --border-strong: #d2d6dc;
+            --input-bg: #ffffff;
+            --user-msg-bg: #e9f6ee;
+            --ai-msg-bg: transparent;
             --accent: #10a37f;
-            --accent-hover: #1a7f64;
-            --danger: #ef4444;
-            --warning: #f59e0b;
-            --btn-hover-bg: #262626;
-            --btn-hover-border: #404040;
-            --btn-primary-hover-bg: #e5e5e5;
-            --input-focus-border: #404040;
-            --hover-overlay: rgba(64, 64, 64, 0.1);
-            --radius-sm: 4px;
-            --radius-md: 8px;
-            --radius-lg: 12px;
+            --accent-hover: #0f8a6c;
+            --accent-soft: rgba(16, 163, 127, 0.10);
+            --accent-bright: #10a37f;
+            --primary-color: #10a37f;
+            --primary-hover: #0f8a6c;
+            --primary-color-dark: #0c6e55;
+            --primary-color-rgb: 16, 163, 127;
+            --success: #10b981;
+            --danger: #dc2626;
+            --danger-color: #dc2626;
+            --warning: #d97706;
+            --btn-hover-bg: #eff1f4;
+            --btn-hover-border: #e3e6ea;
+            --btn-primary-hover-bg: #0f8a6c;
+            --input-focus-border: #10a37f;
+            --hover-overlay: rgba(15, 17, 21, 0.05);
+            --hover-light: rgba(15, 17, 21, 0.06);
+            --hover-bg: #eff1f4;
+            --bg-hover: #eff1f4;
+            --radius-sm: 6px;
+            --radius-md: 10px;
+            --radius-lg: 14px;
             --radius-xl: 24px;
-            --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-            --user-avatar-bg: #5436da;
-            --gradient-start: rgba(13, 13, 13, 0);
+            --radius-pill: 100px;
+            --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            --shadow-sm: 0 1px 2px 0 rgba(15, 17, 21, 0.04);
+            --shadow-md: 0 2px 4px rgba(15, 17, 21, 0.03), 0 8px 24px rgba(15, 17, 21, 0.06);
+            --shadow-lg: 0 0 1px rgba(15, 17, 21, 0.15), 0 12px 32px rgba(15, 17, 21, 0.12);
+            --shadow-input: 0 2px 2px rgba(15, 17, 21, 0.02), 0 6px 16px rgba(15, 17, 21, 0.05);
+            --shadow-pill: 0 1px 1px rgba(16, 24, 32, 0.03), 0 2px 4px rgba(16, 24, 32, 0.05), 0 8px 20px rgba(16, 24, 32, 0.05);
+            --user-avatar-bg: #10a37f;
+            --gradient-start: rgba(255, 255, 255, 0);
             --input-border-radius: 26px;
-            --focus-border: #404040;
-            --hover-light: rgba(255, 255, 255, 0.1);
-            --danger-hover: #dc2626;
-            --danger-bg: rgba(239, 68, 68, 0.1);
-            --danger-border: rgba(239, 68, 68, 0.2);
-            --modal-overlay: rgba(0, 0, 0, 0.7);
-            --sidebar-width: 260px;
+            --focus-border: #10a37f;
+            --danger-hover: #b91c1c;
+            --danger-bg: rgba(220, 38, 38, 0.08);
+            --danger-border: rgba(220, 38, 38, 0.18);
+            --modal-overlay: rgba(15, 17, 21, 0.45);
+            --sidebar-width: 261px;
             --avatar-size: 32px;
-            --font-mono: 'Fira Code', 'Consolas', 'Monaco', monospace;
+            --content-max-width: 840px;
+            --content-padding-horizontal: 44px;
+            --font-mono: Menlo, Monaco, Consolas, "Cascadia Mono", "Ubuntu Mono", "DejaVu Sans Mono", "Liberation Mono", monospace;
             --scrollbar-width: 6px;
             --scrollbar-width-modal: 8px;
             --message-border-radius: 18px;
-            --code-bg: #1e1e1e;
-            --code-border: #333333;
-            --pre-bg: #1a1a1a;
-            --blockquote-bg: rgba(255, 255, 255, 0.05);
-            --blockquote-border: #444444;
-            --link-color: #10a37f;
-            --link-hover: #1a7f64;
-            --table-border: #333333;
-            --table-header-bg: #2a2a2a;
-            --table-row-hover: rgba(255, 255, 255, 0.05);
-            --scrollbar-track: #1a1a1a;
-            --scrollbar-thumb: #404040;
-            --scrollbar-thumb-hover: #555555;
-            --selection-bg: rgba(16, 163, 127, 0.3);
+            --code-bg: #f6f7f9;
+            --code-border: #e7e9ec;
+            --code-banner: #eceef1;
+            --pre-bg: #f6f7f9;
+            --blockquote-bg: rgba(15, 17, 21, 0.03);
+            --blockquote-border: #10a37f;
+            --link-color: #0f8a6c;
+            --link-hover: #0c6e55;
+            --table-border: #e3e6ea;
+            --table-header-bg: #f5f6f8;
+            --table-row-hover: rgba(0, 0, 0, 0.03);
+            --scrollbar-track: transparent;
+            --scrollbar-thumb: #d2d6dc;
+            --scrollbar-thumb-hover: #b6bcc4;
+            --selection-bg: rgba(16, 163, 127, 0.22);
             --loading-spinner: #10a37f;
-            --typing-indicator: #666666;
-            --sidebar-hover: rgba(255, 255, 255, 0.05);
+            --typing-indicator: #9ca3af;
+            --sidebar-hover: rgba(15, 17, 21, 0.05);
             --chat-bg-pattern: none;
-            --glow-effect: rgba(16, 163, 127, 0.5);
+            --glow-effect: rgba(16, 163, 127, 0.25);
             --transition-speed: 0.2s;
             --animation-easing: ease-out;
+            --toast-info-bg: #21262c;
+            --toast-info-border: #21262c;
+            --toast-info-text: #eceff3;
+            --toast-warning-bg: #3f2d0c;
+            --toast-warning-border: #5a4517;
+            --toast-warning-text: #f5c97b;
+            --toast-error-bg: #3f1515;
+            --toast-error-border: #5a1f1f;
+            --toast-error-text: #ffb3b3;
+            --toast-success-bg: #102e23;
+            --toast-success-border: #1f4a38;
+            --toast-success-text: #8affd1;
         }
     </style>
 
@@ -101,40 +135,38 @@
     <!-- Sidebar -->
     <aside id="sidebar">
         <div class="sidebar-header">
-            <div style="display: flex; align-items: center; gap: 10px;">
-                <span class="material-icons-outlined">smart_toy</span>
-                <strong>PuterGPT</strong>
+            <div class="brand">
+                <span class="brand-mark material-icons-outlined">smart_toy</span>
+                <span class="brand-name">PuterGPT</span>
             </div>
             <button class="search-toggle-btn" onclick="openSearchModal()" title="Search (Ctrl+Shift+F)">
                 <span class="material-icons-outlined">search</span>
             </button>
         </div>
-        
+
         <div class="sidebar-content">
-            <button class="btn primary" onclick="newChat()">
+            <button class="new-chat-btn" onclick="newChat()">
                 <span class="material-icons-outlined">add</span>
                 New Chat
             </button>
-            
-            <button class="btn" onclick="importChat()">
+
+            <button class="import-chat-btn" onclick="importChat()">
                 <span class="material-icons-outlined">upload</span>
                 Import Chat
             </button>
-            
-            <div style="height: 10px"></div>
-            
-            <div style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-secondary); font-weight: 700; margin-bottom: 5px;">Saved Chats</div>
+
+            <div class="saved-chats-label">Saved Chats</div>
             <div id="saved-chats-container" class="saved-chats-list">
                 <!-- Chat items injected here -->
-                <div style="padding:10px; color:var(--text-secondary); font-size:0.8rem; font-style:italic;">No saved chats yet.</div>
+                <div class="saved-chats-empty">No saved chats yet.</div>
             </div>
+        </div>
 
-            <div style="margin-top:auto">
-                <button class="btn" onclick="openSettings()">
-                    <span class="material-icons-outlined">settings</span>
-                    Settings & AI Config
-                </button>
-            </div>
+        <div class="sidebar-footer">
+            <button class="settings-row" onclick="openSettings()">
+                <span class="settings-row-icon material-icons-outlined">settings</span>
+                <span class="settings-row-label">Settings &amp; AI Config</span>
+            </button>
         </div>
     </aside>
 
@@ -142,35 +174,35 @@
     <main id="main">
         <div id="chat-container">
             <!-- Messages will be injected here -->
-            <div class="message ai">
-                <div class="avatar ai"><span class="material-icons-outlined">smart_toy</span></div>
-                <div class="message-content">
-                    <p>Hello! I am your AI assistant. </p>
-                    <p>Please configure your API Tokens in Settings.</p>
-                    <p><em>Hover over messages to see the edit icon (pencil).</em></p>
-                    <div style="margin-top: 15px; display: flex; gap: 8px; align-items: center;">
-                        <button class="btn primary" style="font-size:0.8rem;" onclick="openSettings()">
-                            <span class="material-icons-outlined" style="font-size:16px">settings</span> Configure Tokens
-                        </button>
-                        <button class="btn" style="font-size:0.8rem;" onclick="quickRegisterToken()">
-                            <span class="material-icons-outlined" style="font-size:16px">flash_on</span> Quick Register (via Puter)
-                        </button>
-                    </div>
-                </div>
+        </div>
+
+        <!-- Welcome view: shown only while the conversation is empty -->
+        <div id="welcome-view" class="welcome-view">
+            <div class="welcome-greeting">How can I help you today?</div>
+            <div class="welcome-hint">Configure your tokens, pick a model, and start chatting.<br><em>Hover over messages to edit or save them.</em></div>
+            <div class="welcome-actions">
+                <button class="btn primary" onclick="openSettings()">
+                    <span class="material-icons-outlined">settings</span> Configure Tokens
+                </button>
+                <button class="btn" onclick="quickRegisterToken()">
+                    <span class="material-icons-outlined">flash_on</span> Quick Register
+                </button>
             </div>
         </div>
 
         <div id="input-area">
             <div class="input-wrapper">
-                <textarea id="user-input" placeholder="Send a message... (Shift+Enter for newline)" rows="1"></textarea>
+                <div id="image-preview" class="image-preview" style="display: none;"></div>
+                <textarea id="user-input" placeholder="Message PuterGPT… (Shift+Enter for newline)" rows="2"></textarea>
                 <input type="file" id="image-input" accept="image/*" multiple style="display: none;">
                 <input type="file" id="import-input" accept=".json" style="display: none;">
-                <button id="image-btn" onclick="document.getElementById('image-input').click()" title="Attach Images"><span class="material-icons-outlined">image</span></button>
-                <button id="send-btn" onclick="handleSendButtonClick()"><span class="material-icons-outlined">send</span></button>
+                <div class="input-function-row">
+                    <button id="image-btn" class="input-chip" onclick="document.getElementById('image-input').click()" title="Attach Images"><span class="material-icons-outlined">image</span><span class="input-chip-label">Image</span></button>
+                    <button id="send-btn" onclick="handleSendButtonClick()" title="Send message"><span class="material-icons-outlined">arrow_upward</span></button>
+                </div>
             </div>
-            <div id="image-preview" class="image-preview" style="display: none;"></div>
 
-            <div style="position:absolute; bottom:5px; font-size:0.7rem; color:#888;" id="puter-footer">
+            <div class="puter-footer" id="puter-footer">
                 Powered by Puter API -- Double check responses!
             </div>
             <script>
@@ -268,7 +300,7 @@
                         <button class="btn primary" id="add-token-btn" onclick="addToken()" style="flex: 1; font-size:0.75rem; padding:6px 8px; justify-content: center;">
                             <span class="material-icons-outlined" style="font-size:14px">add</span> Add
                         </button>
-                        <button class="btn" id="quick-register-btn" onclick="quickRegisterToken()" style="flex: 1; font-size:0.75rem; padding:6px 8px; background-color: #10b981; justify-content: center;">
+                        <button class="btn" id="quick-register-btn" onclick="quickRegisterToken()" style="flex: 1; font-size:0.75rem; padding:6px 8px; background-color: var(--accent); color: #ffffff; border-color: transparent; justify-content: center;">
                             <span class="material-icons-outlined" style="font-size:14px">flash_on</span> Quick Register (via Puter)
                         </button>
                     </div>
@@ -332,7 +364,6 @@
             <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:20px;">
                 <button class="btn" onclick="closeSettings()">Close</button>
                 <button class="btn" onclick="saveSettings()">Save</button>
-                <button class="btn danger" onclick="deleteCustomTheme()" id="delete-theme-btn" style="display:none;">Delete Theme</button>
             </div>
         </div>
     </div>

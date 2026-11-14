@@ -1,59 +1,87 @@
 /* Reasoning Block Styles */
-.reasoning-block { 
-    border-left: 2px solid var(--accent); 
-    background: var(--bg-secondary); 
-    margin-bottom: 12px; 
-    border-radius: var(--radius-sm); 
+.reasoning-block {
+    margin-bottom: 12px;
+}
+
+.reasoning-header {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 12px 4px 6px;
+    height: 30px;
+    border-radius: var(--radius-pill);
     border: 1px solid var(--border-color);
-}
-
-.reasoning-header { 
-    padding: 10px 14px; 
-    cursor: pointer; 
-    font-size: 0.875rem; 
-    color: var(--text-secondary); 
-    display: flex; 
-    justify-content: space-between; 
-    align-items: center; 
-    user-select: none; 
+    background: var(--bg-secondary);
+    cursor: pointer;
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    user-select: none;
     font-weight: 500;
+    transition: background-color 0.15s ease, color 0.15s ease;
 }
 
-.reasoning-content { 
-    padding: 0 14px 14px 14px; 
-    font-size: 0.875rem; 
-    color: var(--text-secondary); 
-    display: none; 
-    white-space: pre-wrap; 
-    line-height: 1.6;
+.reasoning-header:hover {
+    background: var(--btn-hover-bg);
+    color: var(--text-primary);
 }
 
-.reasoning-content.open { 
-    display: block; 
+.reasoning-header::before {
+    content: '';
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: reasoning-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes reasoning-pulse {
+    0%, 100% { opacity: 0.45; transform: scale(0.9); }
+    45% { opacity: 1; transform: scale(1.25); }
+}
+
+.reasoning-header .material-icons-outlined {
+    font-size: 18px !important;
+    transition: transform 0.2s ease;
+}
+
+.reasoning-content {
+    margin-top: 10px;
+    padding: 4px 0 4px 15px;
+    border-left: 1px solid var(--border-strong);
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    display: none;
+    white-space: pre-wrap;
+    line-height: 1.65;
+}
+
+.reasoning-content.open {
+    display: block;
 }
 
 /* Tool Use Block Styles */
 .tool-use-block {
-    border-left: 2px solid #10b981;
-    background: var(--bg-secondary);
     margin-bottom: 12px;
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-lg);
     border: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    overflow: hidden;
 }
 
 .tool-use-header {
-    padding: 10px 14px;
-    font-size: 0.875rem;
+    padding: 8px 14px;
+    font-size: 0.82rem;
     color: var(--text-secondary);
     display: flex;
     align-items: center;
     gap: 8px;
     font-weight: 500;
+    border-bottom: 1px solid var(--border-color);
 }
 
 .tool-use-content {
-    padding: 0 14px 14px 14px;
-    font-size: 0.875rem;
+    padding: 10px 14px 12px;
+    font-size: 0.85rem;
     color: var(--text-secondary);
     white-space: pre-wrap;
     line-height: 1.6;

@@ -9,8 +9,8 @@ window.enterEditMode = function(index) {
     if (!msgEl) return;
 
     const contentEl = msgEl.querySelector('.message-content');
-    const renderedContent = contentEl.querySelector('.rendered-content');
-    const actions = msgEl.querySelector('.avatar-actions');
+    const renderedContent = contentEl.querySelector('.rendered-content') || contentEl.querySelector('.user-bubble');
+    const actions = msgEl.querySelector('.msg-footer');
     
     renderedContent.style.display = 'none';
     if (actions) {
