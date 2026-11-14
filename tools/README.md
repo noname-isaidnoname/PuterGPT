@@ -51,3 +51,4 @@ Options (env vars or flags):
 - Each run is a fresh ephemeral browser profile, so tests may freely mutate `localStorage`/IndexedDB — nothing persists.
 - Clicks are DOM clicks (`el.click()` via evaluate), which both backends support uniformly. Visibility/hit-testing is not covered; check that manually if you change layout.
 - Expected output: `PASS` lines per check and `[<name>] PASS` at the end. A run is only valid with **zero console errors and zero page errors**.
+- Avoid adding tools or harnesses at `/tmp/*` as they'll be deleted on reboot. If you currently have tests there, move them to `./tools/*` directory.
