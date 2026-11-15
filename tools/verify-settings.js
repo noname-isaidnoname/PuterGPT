@@ -24,7 +24,7 @@ run('verify-settings', async (page, ctx) => {
     check(await page.evaluate("document.getElementById('settings-panel-general').classList.contains('active')"), 'general panel visible');
 
     // Tab switching
-    for (const tab of ['model', 'tokens', 'appearance', 'general']) {
+    for (const tab of ['model', 'tokens', 'appearance', 'data', 'general']) {
         await page.click(`.settings-tab[data-tab="${tab}"]`);
         await page.waitFor(`document.getElementById('settings-panel-${tab}').classList.contains('active')`);
         check(await page.evaluate("document.querySelector('.settings-tab.active')?.dataset.tab") === tab, `tab switch: ${tab}`);

@@ -6,10 +6,21 @@
     <meta name="theme-color" content="#151518">
     <title>PuterGPT</title>
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js"></script>
-    <script src="https://unpkg.com/dexie/dist/dexie.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js" integrity="sha384-/TQbtLCAerC3jgaim+N78RZSDYV7ryeoBCVqTuzRrFec2akfBkHS7ACQ3PQhvMVi" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js" integrity="sha384-0d+Gr7vM4Drod8E3hXKgciWJSWbjD/opKLLygI9ktiWbuvlDwQLzU46wJ9s5gsp7" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/dexie@4.0.11/dist/dexie.js" integrity="sha384-xvIElU6YUOHWV2CSq/HNlheLfZaGtHS5Edmx00KmC0yHZaVUNZLhQoEbE7KQE6Z7" crossorigin="anonymous"></script>
+    <script>
+        if (!window.marked || !window.hljs || !window.LZString || !window.Dexie) {
+            window.addEventListener('DOMContentLoaded', () => {
+                const error = document.createElement('div');
+                error.setAttribute('role', 'alert');
+                error.style.cssText = 'position:fixed;inset:0;z-index:99999;background:#151518;color:#fff;display:grid;place-content:center;padding:2rem;font:1rem system-ui;text-align:center';
+                error.textContent = 'PuterGPT could not load a required library. Check your connection or content blocker and reload.';
+                document.body.appendChild(error);
+            });
+        }
+    </script>
     <link rel="stylesheet" id="hljs-theme" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
 
     <!-- Default theme CSS variables (dark) - defined here so they exist before any JavaScript runs -->

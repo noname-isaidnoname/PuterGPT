@@ -39,4 +39,10 @@ run('verify-mobile', { viewport: { width: 420, height: 850 } }, async (page, ctx
     await page.waitFor("document.getElementById('settings-panel-appearance').classList.contains('active')");
     check(true, 'appearance tab reachable');
     await ctx.shot('mobile-appearance.png');
+
+    await page.click('.settings-tab[data-tab="data"]');
+    await page.waitFor("document.getElementById('settings-panel-data').classList.contains('active')");
+    await sleep(400);
+    check(true, 'data tab reachable');
+    await ctx.shot('mobile-data.png');
 });

@@ -129,7 +129,7 @@ function planTasks() {
 
     for (const harness of harnesses) {
         if (!BROWSER_HARNESSES.includes(harness)) {
-            push(harness); // edge-cases: playwright only
+            push(harness, 'playwright'); // Lightpanda cannot intercept requests.
             continue;
         }
         if (backendArg === 'all') {

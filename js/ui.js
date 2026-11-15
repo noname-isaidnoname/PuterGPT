@@ -261,6 +261,9 @@ window.switchSettingsTab = (tab) => {
     modal.querySelectorAll('.settings-panel').forEach(panel => {
         panel.classList.toggle('active', panel.id === `settings-panel-${tab}`);
     });
+    if (window.innerWidth <= 768) {
+        modal.querySelector(`.settings-tab[data-tab="${tab}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    }
 };
 
 window.openSettings = () => {

@@ -121,7 +121,7 @@ If `playwright` is installed but `chromium` binary isn't, Don't ask the user whe
 - Built-in theme changes go in **both** `index.html` and `js/store.js` (see Theming) — one without the other ships broken half-themes.
 - Don't reuse variable names for JS-inline styles without checking who else reads them (`--input-bg`, `--border-color`, `--radius-sm` are read by JS-injected HTML).
 - `reRenderAllMessages` re-creates every message; don't rely on element identity across rerenders.
-- `marked`, `hljs`, `Dexie`, `lz-string` are CDN/global scripts (no imports); `hljs` loads `github.min.css` by default and `applyTheme()` swaps it for dark.
+- `marked` 12.0.2, `hljs` 11.9.0, `Dexie` 4.0.11, and `lz-string` 1.5.0 are pinned CDN/global scripts with SRI (no imports); changing their versions requires updating the integrity hashes. Missing globals show a blocking error. `applyTheme()` swaps the highlight.js stylesheet between light and dark.
 - Inline `style="…"` on some buttons/inputs is deliberate legacy; converting to classes is fine if you keep the `id`s.
 - `preferences`-dependent JS (token order, rotation) lives in `localStorage` (`puter_tokens` etc.) only until the first migration to IndexedDB.
 - Global `input[type="text"]` / `.btn` rules in `ui-elements.css` outrank same-specificity component classes — a class like `.search-input` silently loses its `padding`. Override with element+class (`input.search-input`) or accept the global styling.

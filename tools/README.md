@@ -75,6 +75,7 @@ Bypass in emergencies: `git commit --no-verify`.
 
 - The app boots without network (the model list falls back to cache/static defaults); the settings/theme/mobile harnesses never send chat messages, so no Puter API token is required.
 - `verify-edge-cases.js` is **Playwright-only** and fully offline — it mocks `api.puter.com/drivers/call` (canned NDJSON / 401 / hanging streams) and `puterai/chat/models/details` (canned model list). The 401 resource errors the browser logs are expected and filtered.
+- Lightpanda does not provide the request interception used by the generation scenarios. `verify-all.js` explicitly labels that harness `(playwright)` even when other checks use Lightpanda.
 - Each run is a fresh ephemeral browser context per scenario, so tests may freely mutate `localStorage`/IndexedDB — nothing persists.
 - Clicks are DOM clicks (`el.click()` via evaluate), which both backends support uniformly. Visibility/hit-testing is not covered; check that manually if you change layout.
 - Expected output: `PASS` lines per check and `[<name>] PASS` at the end. A run is only valid with **zero console errors and zero page errors**.

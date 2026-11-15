@@ -14,4 +14,8 @@ if ! command -v node >/dev/null 2>&1; then
     exit 1
 fi
 
+for file in js/*.js; do
+    node --check "$file" || exit 1
+done
+
 exec node tools/verify-all.js --changed
