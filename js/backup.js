@@ -1,4 +1,4 @@
-import { db, reportStorageError } from './indexeddb-storage.js';
+import { db, reportStorageError, getPendingLegacyChats } from './indexeddb-storage.js';
 import { downloadJsonFile, createModal } from './modal-helper.js';
 import { emit } from './event-bus.js';
 import { generateUniqueId } from './utils.js';
@@ -59,6 +59,39 @@ function validateBackup(data) {
     return data;
 }
 
+// Keep the local copy at its original ID (the one used at startup). Preserve
+// differing IndexedDB copies under unused IDs so the ordinary restore path can
+// restore both, with provenance recorded in the backup.
+export function collectBackupThemes(localThemes, storedThemes, reservedIds = []) {
+    if (!isObject(localThemes) || !isObject(storedThemes)) throw new Error('Invalid custom theme storage');
+    const localEntries = Object.entries(localThemes).map(([id, value]) => ({ id, value }));
+    const storedEntries = Object.entries(storedThemes).map(([id, value]) => ({ id, value }));
+    for (const themes of [localEntries, storedEntries]) {
+        validateBackup({ version: 1, chats: [], themes, settings: {} });
+        assertJsonSafe(themes);
+    }
+    const used = new Set([...localEntries.map(theme => theme.id), ...storedEntries.map(theme => theme.id), ...reservedIds]);
+    const themes = [...localEntries];
+    const indexedDBCopies = [];
+    for (const { id, value } of storedEntries) {
+        if (!Object.hasOwn(localThemes, id)) {
+            themes.push({ id, value });
+            indexedDBCopies.push({ originalId: id, backupId: id });
+        } else if (JSON.stringify(localThemes[id]) !== JSON.stringify(value)) {
+            let backupId = `${id}-recovered-db`;
+            let suffix = 2;
+            while (used.has(backupId)) backupId = `${id}-recovered-db-${suffix++}`;
+            used.add(backupId);
+            themes.push({ id: backupId, value });
+            indexedDBCopies.push({ originalId: id, backupId });
+        }
+    }
+    const localOnlyIds = localEntries.filter(theme => !Object.hasOwn(storedThemes, theme.id)).map(theme => theme.id);
+    const recovery = indexedDBCopies.length || localOnlyIds.length
+        ? { indexedDBCopies, localOnlyIds } : undefined;
+    return { themes, recovery };
+}
+
 export async function createBackup(includeTokens = false) {
     const snapshot = await db.transaction('r', db.chats, db.settings, db.tokens, async () => {
         const chats = (await db.chats.toArray()).map(chat => {
@@ -75,18 +108,17 @@ export async function createBackup(includeTokens = false) {
         if (rows.some(row => !isObject(row) || typeof row.key !== 'string')) throw new Error('Invalid settings records');
         const storedThemes = rows.find(row => row.key === 'customThemes')?.value;
         const local = localStorage.getItem('customThemes');
-        const themes = local === null ? {} : JSON.parse(local);
-        if (!isObject(themes) || (storedThemes !== undefined && JSON.stringify(storedThemes) !== JSON.stringify(themes))) {
-            throw new Error('Custom theme storage is inconsistent');
-        }
-        const settings = Object.fromEntries(rows.filter(row => row.key !== 'customThemes').map(row => [row.key, row.value]));
+        const localThemes = local === null ? {} : JSON.parse(local);
+        const { themes, recovery } = collectBackupThemes(localThemes, storedThemes === undefined ? {} : storedThemes);
+        const settings = Object.fromEntries(rows.filter(row => row.key !== 'customThemes'
+            && row.key !== 'legacy_chat_migration_sha256').map(row => [row.key, row.value]));
         // A quota failure can leave the active transcript newer than IndexedDB.
-        if (state.currentChatId && state.messages.length) {
+        const pending = state.pendingChatData?.id === state.currentChatId ? state.pendingChatData : null;
+        if (state.currentChatId && (state.messages.length || pending)) {
             const index = chats.findIndex(chat => chat.id === state.currentChatId);
             const existing = index < 0 ? null : chats[index];
             const firstUser = state.messages.find(message => message.role === 'user');
             const text = getMessageText(firstUser);
-            const pending = state.pendingChatData?.id === state.currentChatId ? state.pendingChatData : null;
             const current = { ...existing, ...pending, id: state.currentChatId,
                 title: pending?.title || existing?.title || (text ? text.substring(0, 25) + (text.length > 25 ? '...' : '') : 'New Chat'),
                 lastModified: Date.now(), messages: state.messages,
@@ -95,9 +127,28 @@ export async function createBackup(includeTokens = false) {
             if (index < 0) chats.push(current);
             else chats[index] = current;
         }
+        const legacy = getPendingLegacyChats();
+        const legacyChatRecovery = [];
+        if (legacy) {
+            validateBackup({ version: 1, chats: legacy, themes: [], settings: {} });
+            assertJsonSafe(legacy);
+            const used = new Set([...chats.map(chat => chat.id), ...legacy.map(chat => chat.id)]);
+            for (const chat of legacy) {
+                const existing = chats.find(item => item.id === chat.id);
+                if (existing && JSON.stringify(existing) === JSON.stringify(chat)) continue;
+                let id = chat.id;
+                if (existing) {
+                    do { id = generateUniqueId(); } while (used.has(id));
+                    used.add(id);
+                }
+                chats.push({ ...chat, id });
+                legacyChatRecovery.push({ originalId: chat.id, backupId: id });
+            }
+        }
         return { version: 1, exportedAt: new Date().toISOString(), chats,
-            themes: Object.entries(themes).map(([id, value]) => ({ id, value })),
-            settings, ...(includeTokens ? { tokens } : {}) };
+            themes, settings, ...(recovery ? { themeRecovery: recovery } : {}),
+            ...(legacyChatRecovery.length ? { legacyChatRecovery } : {}),
+            ...(includeTokens ? { tokens } : {}) };
     });
     validateBackup(snapshot);
     assertJsonSafe(snapshot);
@@ -112,7 +163,14 @@ window.exportFullBackup = async () => {
         const includeTokens = document.getElementById('backup-include-tokens').checked;
         const json = await createBackup(includeTokens);
         downloadJsonFile(json, `putergpt-backup-${new Date().toISOString().slice(0, 10)}.json`);
-        emit('toast:show', 'Backup exported successfully', 'success');
+        const result = JSON.parse(json);
+        if (result.themeRecovery || result.legacyChatRecovery) {
+            emit('toast:show', result.themeRecovery
+                ? 'Backup exported with differing theme copies. Check themeRecovery in the file for details.'
+                : 'Backup exported with recovered legacy chats. Check legacyChatRecovery for details.', 'info');
+        } else {
+            emit('toast:show', 'Backup exported successfully', 'success');
+        }
     } catch (error) {
         emit('toast:show', `Backup failed: ${error.message}`, 'error');
     }
@@ -130,7 +188,10 @@ export async function restoreBackup(data, policy) {
     let localChanged = false;
     try {
         await db.transaction('rw', db.chats, db.settings, db.tokens, async () => {
-            const themes = { ...localThemes };
+            const storedThemes = (await db.settings.get('customThemes'))?.value;
+            const incomingIds = new Set(data.themes.map(theme => theme.id));
+            const existingThemes = collectBackupThemes(localThemes, storedThemes === undefined ? {} : storedThemes, incomingIds);
+            const themes = Object.fromEntries(existingThemes.themes.map(theme => [theme.id, theme.value]));
             for (const chat of data.chats) {
                 const existing = await db.chats.get(chat.id);
                 if (existing && policy === 'skip') continue;
@@ -146,7 +207,7 @@ export async function restoreBackup(data, policy) {
                 if (Object.hasOwn(themes, id)) {
                     if (policy === 'skip') continue;
                     if (policy === 'rename') {
-                        do { id = `custom-${generateUniqueId()}`; } while (Object.hasOwn(themes, id));
+                        do { id = `custom-${generateUniqueId()}`; } while (Object.hasOwn(themes, id) || incomingIds.has(id));
                     }
                 }
                 themes[id] = theme.value;
@@ -157,6 +218,8 @@ export async function restoreBackup(data, policy) {
                 await db.settings.put({ key: 'theme', value: 'dark' });
             }
             for (const [key, value] of Object.entries(data.settings)) {
+                // A marker only applies to chats migrated within this database.
+                if (key === 'legacy_chat_migration_sha256') continue;
                 if (policy !== 'overwrite' && await db.settings.get(key)) continue;
                 // Do not automatically activate imported theme scripts.
                 if (key === 'theme' && typeof value === 'string' && value.startsWith('custom-')) continue;
@@ -189,7 +252,7 @@ document.getElementById('backup-input').addEventListener('change', async event =
         const modal = createModal(`
             <div class="modal">
                 <h3>Restore backup?</h3>
-                <p>Restore merges chats, settings, themes and any included tokens. Custom themes may contain JavaScript; only continue if you trust this file. The page will reload.</p>
+                <p>Restore merges chats, settings, themes and any included tokens. If existing theme stores differ, both copies are kept under separate IDs before applying your choice below. Custom themes may contain JavaScript; only continue if you trust this file. The page will reload.</p>
                 <label for="backup-conflict">When data already exists</label>
                 <select id="backup-conflict">
                     <option value="skip">Keep existing data</option>

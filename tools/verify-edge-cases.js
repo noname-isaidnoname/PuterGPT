@@ -150,6 +150,298 @@ async function main() {
     return true;
   }, sel);
 
+  scenario('Legacy chat migration quota failure offers recoverable backup', async () => {
+    const page = await newPage();
+    try {
+      const result = await page.evaluate(async () => {
+        const { db, migrateFromLocalStorage } = await import('./js/indexeddb-storage.js');
+        const legacy = [
+          { id: 'legacy-1', title: 'Legacy one', lastModified: 1, messages: [{ role: 'user', content: 'Keep me' }] },
+          { id: 'legacy-2', title: 'Legacy two', lastModified: 2, messages: [] }
+        ];
+        localStorage.setItem('puter_chats', JSON.stringify(legacy));
+        const original = db.chats.bulkAdd;
+        db.chats.bulkAdd = async function (chats) {
+          await db.chats.add(chats[0]);
+          const error = new Error('Bulk write failed');
+          error.name = 'BulkError';
+          error.failures = [new DOMException('Full', 'QuotaExceededError')];
+          throw error;
+        };
+        try { await migrateFromLocalStorage(); } finally { db.chats.bulkAdd = original; }
+        return { count: await db.chats.count(), legacy: JSON.parse(localStorage.getItem('puter_chats')) };
+      });
+      check(result.count === 0 && result.legacy.length === 2, 'Failed migration rolls back partial writes and keeps legacy data');
+      const action = page.locator('.toast-actionable').last().getByRole('button', { name: 'Export backup' });
+      check(await action.count() === 1, 'Legacy migration quota error offers backup');
+      const [download] = await Promise.all([page.waitForEvent('download'), action.click()]);
+      const backup = JSON.parse(fs.readFileSync(await download.path(), 'utf8'));
+      check(backup.chats.some(chat => chat.id === 'legacy-1' && chat.messages[0].content === 'Keep me')
+        && backup.chats.some(chat => chat.id === 'legacy-2' && chat.messages.length === 0)
+        && backup.legacyChatRecovery.length === 2, 'Downloaded backup includes both failed legacy chats');
+      const collision = await page.evaluate(async () => {
+        const { db } = await import('./js/indexeddb-storage.js');
+        const { createBackup } = await import('./js/backup.js');
+        await db.chats.put({ id: 'legacy-1', title: 'Newer chat', lastModified: 3, messages: [] });
+        return JSON.parse(await createBackup());
+      });
+      check(collision.chats.some(chat => chat.id === 'legacy-1' && chat.title === 'Newer chat')
+        && collision.chats.some(chat => chat.id !== 'legacy-1' && chat.title === 'Legacy one')
+        && collision.legacyChatRecovery.some(item => item.originalId === 'legacy-1' && item.backupId !== 'legacy-1'),
+      'Backup preserves both sides of a later chat ID collision');
+      const retried = await page.evaluate(async () => {
+        const { db, migrateFromLocalStorage, getPendingLegacyChats } = await import('./js/indexeddb-storage.js');
+        await db.chats.clear();
+        await migrateFromLocalStorage();
+        return { count: await db.chats.count(), pending: getPendingLegacyChats() };
+      });
+      check(retried.count === 2 && retried.pending === null, 'Successful retry migrates both chats and clears recovery state');
+      check(await page.evaluate(async () => {
+        const { db } = await import('./js/indexeddb-storage.js');
+        const { createBackup } = await import('./js/backup.js');
+        const marker = await db.settings.get('legacy_chat_migration_sha256');
+        const backup = JSON.parse(await createBackup());
+        return !!marker && !Object.hasOwn(backup.settings, 'legacy_chat_migration_sha256');
+      }), 'Successful migration records a database-local marker that backups exclude');
+      await page.evaluate(async () => {
+        const { db } = await import('./js/indexeddb-storage.js');
+        await db.chats.update('legacy-1', { title: 'Edited after migration' });
+      });
+      await page.reload({ waitUntil: 'load' });
+      await page.waitForFunction(() => document.getElementById('main').classList.contains('welcome-mode'));
+      check(await page.evaluate(async () => (await import('./js/indexeddb-storage.js')).getPendingLegacyChats() === null),
+        'Confirmed successful migration is not recovered again after reload');
+    } finally {
+      await page.close();
+    }
+  });
+
+  scenario('Marker deletion failure does not hide legacy recovery', async () => {
+    const page = await newPage();
+    let restorePage;
+    try {
+      const stateAfterFailure = await page.evaluate(async () => {
+        const { db, migrateFromLocalStorage } = await import('./js/indexeddb-storage.js');
+        const legacy = [{ id: 'witness-chat', title: 'Original', lastModified: 1,
+          messages: [{ role: 'user', content: 'Legacy message' }], __puterLegacyMigrationProof: 'user data' }];
+        localStorage.setItem('puter_chats', JSON.stringify(legacy));
+        await migrateFromLocalStorage();
+        const migrated = await db.chats.get('witness-chat');
+        const marker = (await db.settings.get('legacy_chat_migration_sha256'))?.value;
+        await db.chats.clear();
+        const original = db.settings.delete;
+        db.settings.delete = function (key) {
+          return key === 'legacy_chat_migration_sha256'
+            ? Promise.reject(new DOMException('Full', 'QuotaExceededError'))
+            : original.call(this, key);
+        };
+        try { await migrateFromLocalStorage(); } finally { db.settings.delete = original; }
+        await db.chats.put({ id: 'witness-chat', title: 'New chat', lastModified: 2, messages: [] });
+        return { marker, migrated, remaining: (await db.settings.get('legacy_chat_migration_sha256'))?.value };
+      });
+      check(stateAfterFailure.marker?.proof && stateAfterFailure.remaining?.proof === stateAfterFailure.marker.proof
+        && stateAfterFailure.migrated.__puterLegacyMigrationProof === 'user data',
+      'Failed deletion leaves the marker intact without overwriting a legacy field');
+      await page.reload({ waitUntil: 'load' });
+      await page.waitForFunction(() => document.getElementById('main').classList.contains('welcome-mode'));
+      check(await page.evaluate(async () => (await import('./js/indexeddb-storage.js')).getPendingLegacyChats()?.length === 1),
+        'Reload rejects a stale marker even when a new chat reuses the old ID');
+      const action = page.locator('.toast-actionable').last().getByRole('button', { name: 'Export backup' });
+      const [download] = await Promise.all([page.waitForEvent('download'), action.click()]);
+      const backup = JSON.parse(fs.readFileSync(await download.path(), 'utf8'));
+      const recoveredId = backup.legacyChatRecovery.find(item => item.originalId === 'witness-chat')?.backupId;
+      check(recoveredId && recoveredId !== 'witness-chat'
+        && backup.chats.some(chat => chat.id === 'witness-chat' && chat.title === 'New chat')
+        && backup.chats.some(chat => chat.id === recoveredId && chat.messages[0].content === 'Legacy message'
+          && chat.__puterLegacyMigrationProof === 'user data'),
+      'Backup preserves the new chat and the original legacy chat');
+      restorePage = await newPage();
+      const restored = await restorePage.evaluate(async data => {
+        const { restoreBackup } = await import('./js/backup.js');
+        const { db } = await import('./js/indexeddb-storage.js');
+        await restoreBackup(data, 'overwrite');
+        return db.chats.toArray();
+      }, backup);
+      check(restored.some(chat => chat.id === 'witness-chat' && chat.title === 'New chat')
+        && restored.some(chat => chat.id === recoveredId && chat.messages[0].content === 'Legacy message'),
+      'Restore recovers both the new and original chat');
+    } finally {
+      if (restorePage) await restorePage.close();
+      await page.close();
+    }
+  });
+
+  scenario('Stale legacy migration marker cannot hide a failed retry', async () => {
+    const page = await newPage();
+    let restorePage;
+    try {
+      const failedRetry = await page.evaluate(async () => {
+        const { db, migrateFromLocalStorage } = await import('./js/indexeddb-storage.js');
+        const legacy = [
+          { id: 'stale-legacy', title: 'Earlier chat', lastModified: 1,
+            messages: [{ role: 'user', content: 'Recover earlier content' }] },
+          { id: 'stale-empty', title: 'Earlier empty chat', lastModified: 2, messages: [] }
+        ];
+        localStorage.setItem('puter_chats', JSON.stringify(legacy));
+        await migrateFromLocalStorage();
+        const hadMarker = !!(await db.settings.get('legacy_chat_migration_sha256'));
+        await db.chats.clear();
+        const original = db.chats.bulkAdd;
+        db.chats.bulkAdd = () => Promise.reject(new DOMException('Full', 'QuotaExceededError'));
+        try { await migrateFromLocalStorage(); } finally { db.chats.bulkAdd = original; }
+        const markerAfterFailure = await db.settings.get('legacy_chat_migration_sha256');
+        await db.chats.put({ id: 'stale-legacy', title: 'New chat', lastModified: 3, messages: [] });
+        return { hadMarker, markerAfterFailure };
+      });
+      check(failedRetry.hadMarker && !failedRetry.markerAfterFailure,
+        'Retry invalidates the previous success marker even when migration fails');
+      await page.reload({ waitUntil: 'load' });
+      await page.waitForFunction(() => document.getElementById('main').classList.contains('welcome-mode'));
+      check(await page.evaluate(async () => (await import('./js/indexeddb-storage.js')).getPendingLegacyChats()?.length === 2),
+        'Reload detects legacy recovery after a new chat is saved');
+      const action = page.locator('.toast-actionable').last().getByRole('button', { name: 'Export backup' });
+      const [download] = await Promise.all([page.waitForEvent('download'), action.click()]);
+      const backup = JSON.parse(fs.readFileSync(await download.path(), 'utf8'));
+      const recoveredId = backup.legacyChatRecovery.find(item => item.originalId === 'stale-legacy')?.backupId;
+      check(recoveredId && recoveredId !== 'stale-legacy'
+        && backup.chats.some(chat => chat.id === 'stale-legacy' && chat.title === 'New chat')
+        && backup.chats.some(chat => chat.id === recoveredId && chat.messages[0].content === 'Recover earlier content')
+        && backup.chats.some(chat => chat.id === 'stale-empty' && chat.messages.length === 0),
+      'Downloaded backup contains the new chat and both legacy chats');
+      restorePage = await newPage();
+      const restored = await restorePage.evaluate(async data => {
+        const { restoreBackup } = await import('./js/backup.js');
+        const { db } = await import('./js/indexeddb-storage.js');
+        await restoreBackup(data, 'overwrite');
+        return db.chats.toArray();
+      }, backup);
+      check(restored.some(chat => chat.id === 'stale-legacy' && chat.title === 'New chat')
+        && restored.some(chat => chat.id === recoveredId && chat.messages[0].content === 'Recover earlier content')
+        && restored.some(chat => chat.id === 'stale-empty' && chat.messages.length === 0),
+      'Restored backup retains the new and recovered legacy chats');
+    } finally {
+      if (restorePage) await restorePage.close();
+      await page.close();
+    }
+  });
+
+  scenario('Failed legacy migration survives reload and restores', async () => {
+    const page = await newPage();
+    let restorePage;
+    try {
+      await page.evaluate(async () => {
+        const { db, migrateFromLocalStorage } = await import('./js/indexeddb-storage.js');
+        const legacy = JSON.stringify([
+          { id: 'legacy-reload', title: 'Legacy', lastModified: 1, messages: [{ role: 'user', content: 'Legacy content' }] },
+          { id: 'legacy-empty', title: 'Legacy empty', lastModified: 2, messages: [] }
+        ]);
+        localStorage.setItem('puter_chats', legacy);
+        // A stale local marker from another or cleared database is not proof.
+        const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(legacy));
+        localStorage.setItem('puter_chats_migrated_sha256',
+          Array.from(new Uint8Array(hash), byte => byte.toString(16).padStart(2, '0')).join(''));
+        const original = db.chats.bulkAdd;
+        db.chats.bulkAdd = () => Promise.reject(new DOMException('Full', 'QuotaExceededError'));
+        try { await migrateFromLocalStorage(); } finally { db.chats.bulkAdd = original; }
+        await db.chats.put({ id: 'legacy-reload', title: 'New chat', lastModified: 3,
+          messages: [{ role: 'user', content: 'New content' }] });
+      });
+      await page.reload({ waitUntil: 'load' });
+      await page.waitForFunction(() => document.getElementById('main').classList.contains('welcome-mode'));
+      check(await page.evaluate(async () => (await import('./js/indexeddb-storage.js')).getPendingLegacyChats()?.length === 2),
+        'Reload detects unconfirmed legacy data despite a new saved chat');
+      const action = page.locator('.toast-actionable').last().getByRole('button', { name: 'Export backup' });
+      check(await action.count() === 1, 'Reload offers a recovery backup');
+      const [download] = await Promise.all([page.waitForEvent('download'), action.click()]);
+      const backup = JSON.parse(fs.readFileSync(await download.path(), 'utf8'));
+      const renamedId = backup.legacyChatRecovery.find(item => item.originalId === 'legacy-reload')?.backupId;
+      check(renamedId && renamedId !== 'legacy-reload'
+        && backup.chats.some(chat => chat.id === 'legacy-reload' && chat.title === 'New chat')
+        && backup.chats.some(chat => chat.id === renamedId && chat.messages[0].content === 'Legacy content')
+        && backup.chats.some(chat => chat.id === 'legacy-empty' && chat.messages.length === 0),
+      'Downloaded backup preserves the new chat and both legacy chats');
+      restorePage = await newPage();
+      const restored = await restorePage.evaluate(async data => {
+        const { restoreBackup } = await import('./js/backup.js');
+        const { db } = await import('./js/indexeddb-storage.js');
+        data.settings.legacy_chat_migration_sha256 = 'forged';
+        await restoreBackup(data, 'overwrite');
+        return { chats: await db.chats.toArray(), marker: await db.settings.get('legacy_chat_migration_sha256') };
+      }, backup);
+      check(restored.chats.some(chat => chat.id === 'legacy-reload' && chat.title === 'New chat')
+        && restored.chats.some(chat => chat.id === renamedId && chat.messages[0].content === 'Legacy content')
+        && restored.chats.some(chat => chat.id === 'legacy-empty' && chat.messages.length === 0),
+      'Restoring the downloaded backup recovers all three chats');
+      check(!restored.marker, 'Restore ignores a database-specific migration marker in a backup');
+    } finally {
+      if (restorePage) await restorePage.close();
+      await page.close();
+    }
+  });
+
+  scenario('Empty quota-failed imports and shared chats are backed up', async () => {
+    const page = await newPage();
+    try {
+      const importId = await page.evaluate(async () => {
+        const { db } = await import('./js/indexeddb-storage.js');
+        const { state } = await import('./js/state.js');
+        const { importChatFromJson } = await import('./js/export.js');
+        const original = db.chats.put;
+        db.chats.put = () => Promise.reject(new DOMException('Full', 'QuotaExceededError'));
+        try {
+          await importChatFromJson({ title: 'Empty import', systemPrompt: 'Keep this prompt', messages: [] });
+        } finally {
+          db.chats.put = original;
+        }
+        return state.currentChatId;
+      });
+      let [download] = await Promise.all([
+        page.waitForEvent('download'),
+        page.locator('.toast-actionable').last().getByRole('button', { name: 'Export backup' }).click()
+      ]);
+      let backup = JSON.parse(fs.readFileSync(await download.path(), 'utf8'));
+      let chat = backup.chats.find(entry => entry.id === importId);
+      check(chat?.title === 'Empty import' && chat.systemPrompt === 'Keep this prompt'
+        && Array.isArray(chat.messages) && chat.messages.length === 0 && !!chat.importedAt,
+      'Backup action preserves empty imported chat and metadata');
+
+      const sharedId = await page.evaluate(async () => {
+        const { db } = await import('./js/indexeddb-storage.js');
+        const { state } = await import('./js/state.js');
+        const { loadSharedChat } = await import('./js/export.js');
+        const data = { title: 'Empty shared', sharedAt: '2026-01-01T00:00:00.000Z', messages: [] };
+        history.replaceState(null, '', '#shared=' + window.LZString.compressToEncodedURIComponent(JSON.stringify(data)));
+        const original = db.chats.put;
+        db.chats.put = () => Promise.reject(new DOMException('Full', 'QuotaExceededError'));
+        try {
+          await loadSharedChat();
+        } finally {
+          db.chats.put = original;
+        }
+        return state.currentChatId;
+      });
+      [download] = await Promise.all([
+        page.waitForEvent('download'),
+        page.locator('.toast-actionable').last().getByRole('button', { name: 'Export backup' }).click()
+      ]);
+      backup = JSON.parse(fs.readFileSync(await download.path(), 'utf8'));
+      chat = backup.chats.find(entry => entry.id === sharedId);
+      check(chat?.title === 'Empty shared' && chat.sharedAt === '2026-01-01T00:00:00.000Z'
+        && Array.isArray(chat.messages) && chat.messages.length === 0 && !!chat.importedAt,
+      'Backup action preserves empty shared chat and metadata');
+      await page.evaluate(async () => (await import('./js/event-bus.js')).emit('chat:save'));
+      await page.waitForFunction(() => [...document.querySelectorAll('.chat-title')].some(el => el.textContent === 'Empty shared'));
+      check(await page.evaluate(async () => {
+        const { state } = await import('./js/state.js');
+        const { db } = await import('./js/indexeddb-storage.js');
+        const saved = await db.chats.get(state.currentChatId);
+        return saved?.title === 'Empty shared' && saved.messages.length === 0 && state.pendingChatData === null;
+      }), 'Retry can save an empty pending chat');
+    } finally {
+      await page.close();
+    }
+  });
+
   scenario('Quota failures preserve imported and shared chats for backup', async () => {
     const page = await newPage();
     try {
@@ -193,6 +485,241 @@ async function main() {
       const [download] = await Promise.all([page.waitForEvent('download'), action.click()]);
       const data = JSON.parse(fs.readFileSync(await download.path(), 'utf8'));
       check(data.chats.some(chat => chat.title === 'Unsaved shared chat' && chat.messages[0].content === 'Shared content'), 'Quota action downloads backup containing unsaved shared chat');
+    } finally {
+      await page.close();
+    }
+  });
+
+  scenario('Startup reconciles divergent theme stores across reloads', async () => {
+    const page = await newPage();
+    try {
+      await page.evaluate(async () => {
+        const { db } = await import('./js/indexeddb-storage.js');
+        const theme = name => ({ name, cssVars: { '--bg-primary': '#123456' } });
+        localStorage.setItem('customThemes', JSON.stringify({
+          'custom-shared': theme('Local version'),
+          'custom-shared-recovered-db': theme('Occupied recovery ID'),
+          'custom-local': theme('Local only')
+        }));
+        await db.settings.put({ key: 'customThemes', value: {
+          'custom-shared': theme('Database version'),
+          'custom-db': theme('Database only')
+        } });
+      });
+      await page.reload({ waitUntil: 'load' });
+      await page.waitForFunction(() => document.getElementById('main').classList.contains('welcome-mode'));
+      const snapshot = () => page.evaluate(async () => ({
+        local: JSON.parse(localStorage.getItem('customThemes')),
+        stored: (await (await import('./js/indexeddb-storage.js')).db.settings.get('customThemes')).value,
+        cards: [...document.querySelectorAll('.theme-card[data-theme-card]')].map(card => card.dataset.themeCard)
+      }));
+      const first = await snapshot();
+      check(JSON.stringify(first.local) === JSON.stringify(first.stored)
+        && first.local['custom-shared']?.name === 'Local version'
+        && first.local['custom-shared-recovered-db-2']?.name === 'Database version'
+        && first.local['custom-shared-recovered-db']?.name === 'Occupied recovery ID'
+        && first.local['custom-db']?.name === 'Database only'
+        && first.local['custom-local']?.name === 'Local only', 'Startup preserves both stores and resolves ID conflicts');
+      check(['custom-shared', 'custom-shared-recovered-db-2', 'custom-db', 'custom-local']
+        .every(id => first.cards.includes(id)), 'Recovered themes are available in the theme picker');
+      check(await page.getByText('Recovered theme copies with separate IDs.').count() === 1,
+        'Startup informs the user about recovered database copies');
+      await page.click('button.settings-row');
+      await page.click('.settings-tab[data-tab="appearance"]');
+      await page.waitForFunction(() => Number(getComputedStyle(document.querySelector('#settings-modal')).opacity) > 0.99);
+      await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'recovered-themes-desktop.png') });
+      await page.setViewportSize({ width: 420, height: 850 });
+      await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'recovered-themes-mobile.png') });
+      await page.reload({ waitUntil: 'load' });
+      await page.waitForFunction(() => document.getElementById('main').classList.contains('welcome-mode'));
+      const second = await snapshot();
+      check(JSON.stringify(second.local) === JSON.stringify(first.local)
+        && JSON.stringify(second.stored) === JSON.stringify(first.stored), 'A second reload keeps recovery IDs stable without duplicates');
+    } finally {
+      await page.close();
+    }
+  });
+
+  scenario('Startup theme reconciliation rolls back if local storage is full', async () => {
+    const page = await newPage();
+    try {
+      const result = await page.evaluate(async () => {
+        const { db } = await import('./js/indexeddb-storage.js');
+        const { loadCustomThemes } = await import('./js/theme-generator.js');
+        const local = { 'custom-local': { name: 'Local', cssVars: {} } };
+        const stored = { 'custom-db': { name: 'Database', cssVars: {} } };
+        localStorage.setItem('customThemes', JSON.stringify(local));
+        await db.settings.put({ key: 'customThemes', value: stored });
+        const original = Storage.prototype.setItem;
+        Storage.prototype.setItem = function (key, value) {
+          if (this === localStorage && key === 'customThemes') throw new DOMException('Full', 'QuotaExceededError');
+          return original.call(this, key, value);
+        };
+        try { await loadCustomThemes(); } finally { Storage.prototype.setItem = original; }
+        return {
+          local: JSON.parse(localStorage.getItem('customThemes')),
+          stored: (await db.settings.get('customThemes')).value
+        };
+      });
+      check(result.local['custom-local']?.name === 'Local' && !result.local['custom-db']
+        && result.stored['custom-db']?.name === 'Database' && !result.stored['custom-local'],
+      'Failed local write rolls back the IndexedDB sync and preserves both originals');
+      check(await page.locator('.toast-actionable').last().getByRole('button', { name: 'Export backup' }).count() === 1,
+        'Local storage quota failure offers a recovery backup');
+    } finally {
+      await page.close();
+    }
+  });
+
+  scenario('Quota failure during custom-theme sync offers backup', async () => {
+    const page = await newPage();
+    try {
+      const result = await page.evaluate(async () => {
+        const { db } = await import('./js/indexeddb-storage.js');
+        const { themeDefinitions } = await import('./js/store.js');
+        const { loadCustomThemes } = await import('./js/theme-generator.js');
+        const themes = { 'custom-sync': { name: 'Sync theme', cssVars: { '--bg-primary': '#123456' } } };
+        localStorage.setItem('customThemes', JSON.stringify(themes));
+        await db.settings.put({ key: 'customThemes', value: themes });
+        const original = db.settings.put;
+        db.settings.put = function (row) {
+          return row.key === 'customThemes'
+            ? Promise.reject(new DOMException('Full', 'QuotaExceededError'))
+            : original.call(this, row);
+        };
+        try { await loadCustomThemes(); } finally { db.settings.put = original; }
+        return {
+          local: JSON.parse(localStorage.getItem('customThemes')),
+          saved: (await db.settings.get('customThemes')).value,
+          definition: themeDefinitions['custom-sync']
+        };
+      });
+      check(!!result.local['custom-sync'] && !!result.saved['custom-sync'] && !!result.definition,
+        'Failed sync preserves local, stored and loaded themes');
+      const action = page.locator('.toast-actionable').last().getByRole('button', { name: 'Export backup' });
+      check(await action.count() === 1, 'Theme sync quota error offers backup');
+      const [download] = await Promise.all([page.waitForEvent('download'), action.click()]);
+      const backup = JSON.parse(fs.readFileSync(await download.path(), 'utf8'));
+      check(backup.themes.some(theme => theme.id === 'custom-sync'), 'Backup action downloads the preserved theme');
+      await page.evaluate(async () => {
+        const { db } = await import('./js/indexeddb-storage.js');
+        const { loadCustomThemes } = await import('./js/theme-generator.js');
+        const themes = JSON.parse(localStorage.getItem('customThemes'));
+        themes['custom-sync'] = { name: 'Local version', cssVars: { '--bg-primary': '#111111' } };
+        themes['custom-sync-recovered-db'] = { name: 'Existing ID', cssVars: { '--bg-primary': '#222222' } };
+        themes['custom-unsynced'] = { name: 'Unsynced', cssVars: { '--bg-primary': '#abcdef' } };
+        await db.settings.put({ key: 'customThemes', value: {
+          'custom-sync': { name: 'Database version', cssVars: { '--bg-primary': '#333333' } },
+          'custom-db-only': { name: 'Database only', cssVars: { '--bg-primary': '#444444' } }
+        } });
+        localStorage.setItem('customThemes', JSON.stringify(themes));
+        const original = db.settings.put;
+        db.settings.put = () => Promise.reject(new DOMException('Full', 'QuotaExceededError'));
+        try { await loadCustomThemes(); } finally { db.settings.put = original; }
+      });
+      const [recoveryDownload] = await Promise.all([
+        page.waitForEvent('download'),
+        page.locator('.toast-actionable').last().getByRole('button', { name: 'Export backup' }).click()
+      ]);
+      const recovery = JSON.parse(fs.readFileSync(await recoveryDownload.path(), 'utf8'));
+      const find = id => recovery.themes.find(theme => theme.id === id)?.value;
+      check(find('custom-sync')?.name === 'Local version' && find('custom-sync-recovered-db-2')?.name === 'Database version'
+        && find('custom-sync-recovered-db')?.name === 'Existing ID', 'Conflicting copies and an occupied recovery ID are preserved');
+      check(find('custom-unsynced')?.name === 'Unsynced' && find('custom-db-only')?.name === 'Database only',
+        'Local-only and database-only themes are preserved');
+      check(recovery.themeRecovery.indexedDBCopies.some(copy => copy.originalId === 'custom-sync' && copy.backupId === 'custom-sync-recovered-db-2')
+        && recovery.themeRecovery.localOnlyIds.includes('custom-unsynced'), 'Backup records recovery provenance');
+      check(await page.getByText('Backup exported with differing theme copies.', { exact: false }).count() === 1,
+        'Export reports differing theme copies');
+      const restored = await page.evaluate(async data => {
+        const { db } = await import('./js/indexeddb-storage.js');
+        const { restoreBackup } = await import('./js/backup.js');
+        localStorage.setItem('customThemes', '{}');
+        await db.settings.put({ key: 'customThemes', value: {} });
+        await restoreBackup(data, 'overwrite');
+        return { local: JSON.parse(localStorage.getItem('customThemes')), stored: (await db.settings.get('customThemes')).value };
+      }, recovery);
+      check(restored.local['custom-sync']?.name === 'Local version'
+        && restored.local['custom-sync-recovered-db-2']?.name === 'Database version'
+        && restored.stored['custom-db-only']?.name === 'Database only'
+        && restored.stored['custom-unsynced']?.name === 'Unsynced', 'Restore retains both versions and synchronizes theme copies');
+      check(await page.evaluate(async () => {
+        const { db } = await import('./js/indexeddb-storage.js');
+        const { createBackup } = await import('./js/backup.js');
+        await db.settings.put({ key: 'customThemes', value: { 'custom-invalid': { name: 'Broken' } } });
+        try { await createBackup(); return false; } catch { return true; }
+      }), 'Invalid database theme copy still fails backup validation');
+    } finally {
+      await page.close();
+    }
+  });
+
+  scenario('Restore reconciles divergent existing theme stores', async () => {
+    const page = await newPage();
+    try {
+      const results = await page.evaluate(async () => {
+        const { db } = await import('./js/indexeddb-storage.js');
+        const { restoreBackup } = await import('./js/backup.js');
+        const theme = name => ({ name, cssVars: { '--bg-primary': '#123456' } });
+        const local = { 'custom-conflict': theme('Local'), 'custom-local-only': theme('Local only') };
+        const stored = { 'custom-conflict': theme('Database'), 'custom-db-only': theme('Database only') };
+        const backup = { version: 1, exportedAt: '', chats: [], settings: {}, themes: [
+          { id: 'custom-conflict', value: theme('Incoming conflict') },
+          { id: 'custom-conflict-recovered-db', value: theme('Incoming reserved ID') }
+        ] };
+        const results = {};
+        for (const policy of ['skip', 'overwrite', 'rename']) {
+          localStorage.setItem('customThemes', JSON.stringify(local));
+          await db.settings.put({ key: 'customThemes', value: stored });
+          await restoreBackup(backup, policy);
+          results[policy] = {
+            local: JSON.parse(localStorage.getItem('customThemes')),
+            stored: (await db.settings.get('customThemes')).value
+          };
+        }
+        localStorage.setItem('customThemes', JSON.stringify(local));
+        await db.settings.put({ key: 'customThemes', value: stored });
+        const original = db.settings.put;
+        db.settings.put = row => row.key === 'customThemes'
+          ? Promise.reject(new DOMException('Full', 'QuotaExceededError')) : original.call(db.settings, row);
+        try { await restoreBackup(backup, 'overwrite'); } catch {}
+        finally { db.settings.put = original; }
+        results.rollback = {
+          local: JSON.parse(localStorage.getItem('customThemes')),
+          stored: (await db.settings.get('customThemes')).value
+        };
+        return results;
+      });
+      for (const policy of ['skip', 'overwrite', 'rename']) {
+        const { local, stored } = results[policy];
+        check(JSON.stringify(local) === JSON.stringify(stored)
+          && local['custom-db-only']?.name === 'Database only'
+          && local['custom-local-only']?.name === 'Local only'
+          && local['custom-conflict-recovered-db-2']?.name === 'Database'
+          && local['custom-conflict-recovered-db']?.name === 'Incoming reserved ID',
+        `${policy}: retains existing divergent copies and reserves incoming IDs`);
+        const names = Object.values(local).map(theme => theme.name);
+        check(policy === 'skip' ? local['custom-conflict'].name === 'Local' && !names.includes('Incoming conflict')
+          : policy === 'overwrite' ? local['custom-conflict'].name === 'Incoming conflict'
+          : local['custom-conflict'].name === 'Local' && names.includes('Incoming conflict'),
+        `${policy}: applies the selected incoming collision policy`);
+      }
+      check(results.rollback.local['custom-conflict'].name === 'Local'
+        && results.rollback.stored['custom-conflict'].name === 'Database'
+        && results.rollback.stored['custom-db-only'].name === 'Database only',
+      'Failed restore leaves both divergent stores unchanged');
+      await page.setInputFiles('#backup-input', {
+        name: 'restore.json', mimeType: 'application/json',
+        buffer: Buffer.from(JSON.stringify({ version: 1, chats: [], themes: [], settings: {} }))
+      });
+      await page.waitForSelector('.modal-overlay.active #backup-restore');
+      check((await page.locator('.modal-overlay.active .modal').innerText()).includes('both copies are kept'),
+        'Restore dialog explains divergent theme handling');
+      await page.waitForFunction(() => Number(getComputedStyle(document.querySelector('.modal-overlay.active')).opacity) > 0.99);
+      await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'restore-themes-desktop.png') });
+      await page.setViewportSize({ width: 420, height: 850 });
+      await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'restore-themes-mobile.png') });
+      await page.click('.modal-overlay.active #backup-cancel');
     } finally {
       await page.close();
     }
@@ -771,6 +1298,21 @@ async function main() {
       check(result.skipped === 'Original' && result.overwritten === 'Imported', 'Skip and overwrite honor chat collisions');
       check(result.chats.length === 2 && result.chats.some(chat => chat.title === 'Imported (imported)'), 'Rename retains both chats');
       check(result.invalidRejected, 'Invalid theme IDs rejected');
+      await page.evaluate(async () => (await import('./js/event-bus.js')).emit('chats:refresh-needed'));
+      await page.waitForSelector('.chat-more-btn');
+      await page.locator('.chat-item').first().hover();
+      await page.locator('.chat-more-btn').first().click();
+      await page.waitForFunction(() => getComputedStyle(document.querySelector('#chat-context-menu')).opacity === '1');
+      await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'backup-menu-desktop.png') });
+      await page.click('#sidebar-filter');
+      await page.setViewportSize({ width: 420, height: 850 });
+      await page.click('.mobile-toggle');
+      await page.locator('.chat-more-btn').first().click();
+      await page.waitForFunction(() => getComputedStyle(document.querySelector('#chat-context-menu')).opacity === '1');
+      await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'backup-menu-mobile.png') });
+      await page.locator('#chat-context-menu .context-item', { hasText: 'Backup and restore' }).click();
+      check(await page.locator('#settings-modal.active #settings-panel-data.active').count() === 1, 'Context menu opens backup and restore settings');
+      check(await page.locator('#backup-include-tokens').isChecked() === false, 'Context menu leaves token inclusion off by default');
     } finally {
       await page.close();
     }

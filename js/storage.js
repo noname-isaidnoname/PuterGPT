@@ -16,8 +16,8 @@ subscribe((newState, prevState) => {
 // Storage & Sidebar Management
 
 async function saveChatToStorage() {
-    if (!state.currentChatId || state.messages.length === 0) return;
     const pending = state.pendingChatData?.id === state.currentChatId ? state.pendingChatData : null;
+    if (!state.currentChatId || (state.messages.length === 0 && !pending)) return;
     
     let title = "New Chat";
     const firstUserMsg = state.messages.find(m => m.role === 'user');

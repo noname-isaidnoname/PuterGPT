@@ -1,9 +1,10 @@
 import { state, els } from './state.js';
 import { themeDefinitions } from './store.js';
 import { emit } from './event-bus.js';
+import { reportStorageError } from './indexeddb-storage.js';
 
 // Custom themes storage
-let customThemes = JSON.parse(localStorage.getItem('customThemes') || '{}');
+let customThemes = {};
 
 // Theme generator functions
 window.openThemeGenerator = () => {
@@ -329,7 +330,6 @@ window.generateCustomTheme = async () => {
         const themeId = await persistCustomTheme(theme);
         await applyNewTheme(themeId, theme.name);
     } catch (error) {
-        const { reportStorageError } = await import('./indexeddb-storage.js');
         if (!reportStorageError(error)) {
             console.error('Theme generation failed:', error);
             emit('toast:show', `Failed to generate theme: ${error.message}`, 'error');
@@ -659,45 +659,39 @@ async function applyNewTheme(themeId, themeName) {
 
 // Load custom themes on startup
 export async function loadCustomThemes() {
+    let localThemes = {};
+    let previousLocal = null;
+    let localChanged = false;
     try {
-        // Use localStorage as the source of truth
-        // IndexedDB writes might not always persist on first attempt (race conditions, etc.),
-        // so localStorage (which is more reliable for simple key-value storage)
-        // is treated as authoritative. IndexedDB is synced to match localStorage.
-        const localData = localStorage.getItem('customThemes');
-        let localThemes = {};
-        if (localData) {
-            try {
-                localThemes = JSON.parse(localData);
-            } catch (e) {
-                console.warn('Failed to parse localStorage customThemes, ignoring', e);
-            }
-        }
-        
-        // Start with localStorage themes (deleted themes are correctly absent here)
-        customThemes = {};
-        Object.entries(localThemes).forEach(([id, theme]) => {
-            customThemes[id] = theme;
-        });
-        
-        // Load themes into definitions
-        Object.entries(customThemes).forEach(([id, theme]) => {
-            themeDefinitions[id] = theme;
-        });
-        
-        // Sync IndexedDB to match localStorage
+        previousLocal = localStorage.getItem('customThemes');
+        localThemes = previousLocal === null ? {} : JSON.parse(previousLocal);
+        const { collectBackupThemes } = await import('./backup.js');
         const { db } = await import('./indexeddb-storage.js');
-        localStorage.setItem('customThemes', JSON.stringify(customThemes));
-        await db.settings.put({ key: 'customThemes', value: customThemes }).catch(err => {
-            console.warn('Failed to sync custom themes to IndexedDB:', err);
+        let reconciled;
+        let recovery;
+        await db.transaction('rw', db.settings, async () => {
+            const stored = (await db.settings.get('customThemes'))?.value;
+            const result = collectBackupThemes(localThemes, stored === undefined ? {} : stored);
+            reconciled = Object.fromEntries(result.themes.map(({ id, value }) => [id, value]));
+            recovery = result.recovery;
+            await db.settings.put({ key: 'customThemes', value: reconciled });
+            localStorage.setItem('customThemes', JSON.stringify(reconciled));
+            localChanged = true;
         });
-        
+        customThemes = reconciled;
+        if (recovery?.indexedDBCopies.length) {
+            emit('toast:show', 'Recovered theme copies with separate IDs.', 'info');
+        }
     } catch (error) {
-        console.error('Failed to load custom themes:', error);
-        // Fallback to localStorage
-        customThemes = JSON.parse(localStorage.getItem('customThemes') || '{}');
-        Object.entries(customThemes).forEach(([id, theme]) => {
-            themeDefinitions[id] = theme;
-        });
+        if (localChanged) {
+            if (previousLocal === null) localStorage.removeItem('customThemes');
+            else localStorage.setItem('customThemes', previousLocal);
+        }
+        if (!reportStorageError(error)) console.error('Failed to load or sync custom themes:', error);
+        // Leave both stores untouched on failure; retain usable local themes.
+        customThemes = localThemes && typeof localThemes === 'object' && !Array.isArray(localThemes) ? localThemes : {};
     }
+    Object.entries(customThemes).forEach(([id, theme]) => {
+        themeDefinitions[id] = theme;
+    });
 }

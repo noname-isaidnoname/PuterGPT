@@ -68,6 +68,8 @@ This is a schematic, not a screenshot. For current desktop and mobile screenshot
 
 Chats, settings, and tokens are stored locally in IndexedDB; custom themes are also mirrored in localStorage. Clearing browser data removes local data, so keep a backup. Restore merges data and lets you keep existing records, overwrite them, or keep both chats and themes when IDs collide.
 
+If the two theme stores differ, startup and backups preserve both copies. Local themes keep their IDs; conflicting IndexedDB copies receive recovery IDs. Startup reports recovered database copies. If a backup encounters unreconciled copies, its `themeRecovery` field identifies the source IDs, and the export notification flags the discrepancy. Restore also reconciles both existing stores before applying your chosen collision policy.
+
 Puter requests send the selected token and relevant prompts or attachments to Puter.ai. The app also loads libraries and fonts from CDNs, and Quick Register loads Puter's SDK. A chat share link contains the shared conversation in its URL; anyone with the link can read it. Token export, token-inclusive backups, and custom JavaScript effects are explicit features that can expose local data, so treat their outputs and sources as sensitive.
 
 ## Known limitations

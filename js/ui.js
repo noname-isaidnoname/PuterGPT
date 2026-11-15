@@ -228,6 +228,12 @@ window.handleExportMarkdown = () => {
     hideContextMenu();
 };
 
+window.handleBackupSettings = () => {
+    hideContextMenu();
+    window.openSettings();
+    window.switchSettingsTab('data');
+};
+
 window.handleShareChat = () => {
     emit('chat:share', activeContextChatId);
     hideContextMenu();

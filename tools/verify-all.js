@@ -129,6 +129,9 @@ function planTasks() {
 
     for (const harness of harnesses) {
         if (!BROWSER_HARNESSES.includes(harness)) {
+            if (backendArg === 'lightpanda' || backendArg === 'all') {
+                console.log(`[verify-all] SKIP ${harness} (lightpanda): request interception requires Playwright; running Playwright instead`);
+            }
             push(harness, 'playwright'); // Lightpanda cannot intercept requests.
             continue;
         }
