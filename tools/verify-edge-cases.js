@@ -14,7 +14,10 @@
 // for sequential.
 // Runs on Playwright only (lightpanda has no route interception).
 //
-// Usage: node tools/verify-edge-cases.js [--base-url URL] [--screenshot-dir DIR]
+// Usage: node tools/verify-edge-cases.js [--base-url URL] [--screenshot-dir DIR] [--only 11[,3,chat...]]
+//   --only selects a subset of the 14 scenarios by 1-based index or name substring
+//   (comma-separated, e.g. --only 11 or --only "generation flows,chat list"). Run it in
+//   loops with --only for tight iteration on one scenario instead of the whole suite.
 // Exits non-zero on any failed check, console error or page error.
 
 const path = require('path');
@@ -1173,7 +1176,10 @@ async function main() {
       if (vCalls === 1) return route.fulfill({ status: 200, contentType: 'application/x-ndjson', body: NDJSON_ANSWER_A });
       return new Promise(() => {});
     });
-    const idle = () => page.waitForFunction(() => document.getElementById('send-btn')?.getAttribute('title') === 'Send message', null, { timeout: 30000 });
+    const idle = () => page.waitForFunction(async () => {
+      const { getState } = await import('./js/store.js');
+      return !getState().isGenerating;
+    }, null, { timeout: 30000 });
     try {
       await seedToken(page);
       await page.evaluate(async () => (await import('./js/indexeddb-storage.js')).db.settings.put({ key: 'auto_name_chats', value: false }));
@@ -1280,7 +1286,10 @@ async function main() {
       }
       return route.fulfill({ status: 200, contentType: 'application/x-ndjson', body: NDJSON_OK });
     });
-    const idle = () => page.waitForFunction(() => document.getElementById('send-btn')?.getAttribute('title') === 'Send message', null, { timeout: 30000 });
+    const idle = () => page.waitForFunction(async () => {
+      const { getState } = await import('./js/store.js');
+      return !getState().isGenerating;
+    }, null, { timeout: 30000 });
     try {
       await seedToken(page);
       await page.evaluate(async () => (await import('./js/indexeddb-storage.js')).db.settings.put({ key: 'auto_name_chats', value: false }));
@@ -1465,7 +1474,10 @@ async function main() {
     // The app ignores sends while a previous stream is still settling
     // (isGenerating), and the send button title is the synchronous UI mirror —
     // always wait for it before pressing Enter or clicking regenerate.
-    const idle = () => page.waitForFunction(() => document.getElementById('send-btn')?.getAttribute('title') === 'Send message', null, { timeout: 30000 });
+    const idle = () => page.waitForFunction(async () => {
+      const { getState } = await import('./js/store.js');
+      return !getState().isGenerating;
+    }, null, { timeout: 30000 });
     try {
       await seedToken(page);
       await page.evaluate(async () => (await import('./js/indexeddb-storage.js')).db.settings.put({ key: 'auto_name_chats', value: false }));
@@ -1534,6 +1546,11 @@ async function main() {
           { timeout: 8000 });
         check(await page.evaluate(() => document.querySelectorAll('.user-bubble').length) === 2,
           'can send again after failure');
+        // Wait for the second 401 stream to settle before moving on — a stale in-flight
+        // stream would poison the next subtest's send (it would be ignored, leaving the
+        // input filled and no bubble). The send button title is the synchronous mirror
+        // of isGenerating.
+        await idle();
         mode = 'fast';
       });
       // --- Test 10: switching chats mid-generation aborts cleanly ---
@@ -1806,6 +1823,27 @@ async function main() {
 
 
 
+  // Optional scenario selection: --only takes a comma-separated list of
+  // 1-based indices and/or case-insensitive name substrings, e.g.
+  //   --only 11                     (just "Generation flows …", index 11)
+  //   --only theme                  (every scenario whose name contains "theme")
+  //   --only 11,"chat list"          (indices and substrings mix freely)
+  const ONLY = argValue('only');
+  if (ONLY) {
+    const terms = ONLY.split(',').map(s => s.trim()).filter(Boolean);
+    const selected = scenarios.filter((s, i) => terms.some(term => {
+      if (/^\d+$/.test(term)) return i + 1 === Number(term);
+      return s.name.toLowerCase().includes(term.toLowerCase());
+    }));
+    if (!selected.length) {
+      console.error(`[verify-edge-cases] --only matched no scenarios. Available:`);
+      scenarios.forEach((s, i) => console.error(`  ${i + 1}. ${s.name}`));
+      process.exit(1);
+    }
+    scenarios.length = 0;
+    scenarios.push(...selected);
+    console.log(`[verify-edge-cases] --only: running ${scenarios.length} of the full suite:\n  - ${scenarios.map(s => s.name).join('\n  - ')}`);
+  }
   // Run scenarios concurrently; each gets its own store for output and
   // console/page error attribution. EDGE_CONCURRENCY=1 forces sequential.
   const defaultConcurrency = Math.min(6, Math.max(4, Math.floor((os.availableParallelism?.() || os.cpus().length) * 1.5)));

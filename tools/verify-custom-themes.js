@@ -55,7 +55,7 @@ run('verify-custom-themes', async (page, ctx) => {
     console.log('CARDS=' + JSON.stringify(cards));
     const byKey = Object.fromEntries(cards.map(c => [c.key, c]));
 
-    check(cards.length === 6, `6 cards rendered (2 built-in + 3 custom + generate), got ${cards.length}`);
+    check(cards.length === 7, `7 cards rendered (2 built-in + 3 custom + new + generate), got ${cards.length}`);
     check(!!byKey['light']?.icon, 'light card has an icon');
     check(!!byKey['dark']?.icon, 'dark card has an icon');
     check(byKey['custom-ocean-1']?.icon === '🌊', 'custom theme uses its icon field');
@@ -64,6 +64,15 @@ run('verify-custom-themes', async (page, ctx) => {
     check(byKey['custom-forest-2']?.label === 'Forest Calm', 'leading emoji stripped from label');
     check(byKey['custom-mystery-3']?.icon === '🎨', 'legacy theme falls back to 🎨');
     check(byKey[null]?.label === 'Generate', 'generate card rendered');
+    check(cards.some(c => c.label === 'New Theme'), 'new theme (preset) card rendered');
+    const editButtons = JSON.parse(await page.evaluate(`JSON.stringify(
+        Array.from(document.querySelectorAll('.theme-card-edit')).map(el => ({
+            label: el.getAttribute('aria-label'),
+            target: el.closest('.theme-card-wrap')?.querySelector('.theme-card')?.dataset.themeCard || null
+        }))
+    )`));
+    check(editButtons.length === 3, `one edit button per custom card, got ${editButtons.length}`);
+    check(editButtons.every(b => b.target && b.target.startsWith('custom-')), 'edit buttons only on custom cards');
     await ctx.shot('appearance-custom-themes.png');
 
     // Activating a custom card applies its vars and marks it active

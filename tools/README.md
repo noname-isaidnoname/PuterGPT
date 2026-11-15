@@ -16,7 +16,8 @@ Lightpanda and falls back to Playwright:
 | script | what it covers |
 | --- | --- |
 | `verify-settings.js` | Desktop settings modal: boot, open via sidebar button, tab switching, toggle switches, theme cards, save / close-with-no-changes / discard-with-changes flows, screenshots of every panel |
-| `verify-custom-themes.js` | Appearance theme cards: seeds 3 custom themes into `localStorage` (load, seed, reload — the app reads customThemes at boot) and checks icon/label fallback logic, activation (cssVars actually applied), Generate card, delete-theme confirmation |
+| `verify-custom-themes.js` | Appearance theme cards: seeds 3 custom themes into `localStorage` (load, seed, reload — the app reads customThemes at boot) and checks icon/label fallback logic, activation (cssVars actually applied), Generate card, New Theme (preset) card, per-custom-card edit buttons, delete-theme confirmation |
+| `verify-theme-editor.js` | Theme editor (per-card pencil): tabbed variable panels (every built-in CSS var + an "Other" tab for theme-specific ones), live preview toggle (off = pre-edit theme restored, edits accumulate silently; on = working theme re-applies), ~300 ms debounce, Cancel restores the pre-edit view, Save persists (and can save with the preview off, keeping the saved theme inactive), JS Effects tab (minified code pretty-prints on open, syntax highlighting overlay, Format button, syntax check blocks save), JS toggle adds/removes `javascript`, "create from preset" flow (empty-name guard, palette copy, icon validation, opens the editor on the new theme), dark/light `data-theme` detection |
 | `verify-mobile.js` | 420×850 viewport (playwright only): open settings from the welcome view, horizontal tab row, all panels reachable |
 | `verify-edge-cases.js` | Failure paths + implicit state machines: mocks `api.puter.com/drivers/call` **and** the ~576 KB `puterai/chat/models/details` endpoint (canned list) via route interception (no network). Covers the user-bubble width bug, streaming success/abort/401 flows, the settings save→close discard-tracking regression, imported/shared/token-name XSS sanitization, advanced search (index, results, open-chat), theme generation end-to-end, code-block copy, delete-chat flow, theme switching, and the themed confirm/prompt dialogs (rename chat/token, delete chat/token). Scenarios are independent and run concurrently (adaptive default 4–6; `EDGE_CONCURRENCY=1` for sequential) |
 | `verify-all.js` | Runs the harnesses in parallel over one shared static server, buffers output per harness, exits non-zero on any failure. Quiet on success (one line per harness, full output only for failures — `--verbose` for everything). `--changed` runs only harnesses affected by uncommitted changes (docs-only commits skip); `--timeout N` bounds each harness (default 180s); `--list` prints the plan |
@@ -58,8 +59,11 @@ playwright install chromium        # or: npx playwright install chromium
 ```bash
 node tools/verify-settings.js                          # auto backend (lightpanda if installed)
 node tools/verify-custom-themes.js --backend playwright # force playwright (needed for screenshots)
+node tools/verify-theme-editor.js                       # theme editor: tabs, live preview, save/cancel, presets
 node tools/verify-mobile.js --backend playwright        # mobile viewport emulation
 node tools/verify-edge-cases.js                         # playwright only (route interception)
+node tools/verify-edge-cases.js --only 11                     # run one scenario (1-based index);
+                                                             #   substrings work too: --only generation flows
 node tools/verify-all.js                                # run all harnesses in parallel
 node tools/verify-all.js --changed                      # only harnesses affected by uncommitted changes
 node tools/verify-all.js --verbose                      # print full output of passing harnesses too
@@ -102,4 +106,4 @@ Bypass in emergencies: `git commit --no-verify`.
 - Clicks are DOM clicks (`el.click()` via evaluate), which both backends support uniformly. Visibility/hit-testing is not covered; check that manually if you change layout.
 - Expected output: `PASS` lines per check and `[<name>] PASS` at the end. A run is only valid with **zero console errors and zero page errors**.
 - Avoid adding tools or harnesses at `/tmp/*` as they'll be deleted on reboot. If you currently have tests there, move them to `./tools/*` directory.
-- To get real AI responses (via the Puter API), use the `PUTER_TOKEN` environment variable in the `tools/.env` file. Do not print it in the console.
+- To get real AI responses (via the Puter API), use the `PUTER_TOKEN` environment variable in the `tools/.env` file. Do not print it in the console. Make sure to use free models to avoid charges. If one free model doesn't work (http error 500 or similar), try another one.

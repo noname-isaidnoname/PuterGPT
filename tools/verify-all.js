@@ -34,7 +34,7 @@ const { startStaticServer } = require('./lib.js');
 const REPO_ROOT = path.resolve(__dirname, '..');
 
 // Harnesses that accept --backend; edge-cases always uses playwright.
-const BROWSER_HARNESSES = ['verify-settings', 'verify-custom-themes', 'verify-mobile'];
+const BROWSER_HARNESSES = ['verify-settings', 'verify-custom-themes', 'verify-theme-editor', 'verify-mobile'];
 const EDGE_CASES = 'verify-edge-cases';
 const ALL_HARNESSES = [...BROWSER_HARNESSES, EDGE_CASES];
 
@@ -42,6 +42,7 @@ const ALL_HARNESSES = [...BROWSER_HARNESSES, EDGE_CASES];
 const HARNESS_BY_FILE = {
     'tools/verify-settings.js': 'verify-settings',
     'tools/verify-custom-themes.js': 'verify-custom-themes',
+    'tools/verify-theme-editor.js': 'verify-theme-editor',
     'tools/verify-mobile.js': 'verify-mobile',
     'tools/verify-edge-cases.js': 'verify-edge-cases',
 };

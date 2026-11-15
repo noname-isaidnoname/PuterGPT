@@ -52,6 +52,33 @@ function makeCard(key, label, iconNode) {
     return card;
 }
 
+function makeCustomCard(key, label, iconNode) {
+    // Wrap the card so the edit button can sit in the corner without nesting
+    // a button inside a button (invalid HTML, broken click handling).
+    const wrap = document.createElement('div');
+    wrap.className = 'theme-card-wrap';
+
+    const card = makeCard(key, label, iconNode);
+
+    const edit = document.createElement('button');
+    edit.type = 'button';
+    edit.className = 'theme-card-edit';
+    edit.title = 'Edit theme';
+    edit.setAttribute('aria-label', `Edit theme ${label}`);
+    const mi = document.createElement('span');
+    mi.className = 'material-icons-outlined';
+    mi.textContent = 'edit';
+    edit.appendChild(mi);
+    edit.addEventListener('click', (event) => {
+        event.stopPropagation();
+        window.openThemeEditor(key);
+    });
+
+    wrap.appendChild(card);
+    wrap.appendChild(edit);
+    return wrap;
+}
+
 export function renderThemeCards() {
     const container = document.getElementById('theme-cards');
     if (!container) return;
@@ -67,8 +94,26 @@ export function renderThemeCards() {
         const rawName = theme.name || key;
         const icon = theme.icon || leadingEmoji(rawName) || '🎨';
         const label = stripLeadingEmoji(rawName).trim() || rawName;
-        container.appendChild(makeCard(key, label, icon));
+        container.appendChild(makeCustomCard(key, label, icon));
     });
+
+    // "New theme from preset" card (no AI required)
+    const newCard = document.createElement('button');
+    newCard.type = 'button';
+    newCard.className = 'theme-card theme-card-new';
+    const newIcon = document.createElement('span');
+    newIcon.className = 'theme-card-icon';
+    const newMi = document.createElement('span');
+    newMi.className = 'material-icons-outlined';
+    newMi.textContent = 'add_circle';
+    newIcon.appendChild(newMi);
+    const newLabel = document.createElement('span');
+    newLabel.className = 'theme-card-name';
+    newLabel.textContent = 'New Theme';
+    newCard.appendChild(newIcon);
+    newCard.appendChild(newLabel);
+    newCard.addEventListener('click', () => window.openThemePresetModal());
+    container.appendChild(newCard);
 
     // "Generate custom theme" card
     const gen = document.createElement('button');

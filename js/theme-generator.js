@@ -613,7 +613,7 @@ function generateCustomThemeId() {
     return `custom-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
 }
 
-async function persistCustomTheme(theme) {
+export async function persistCustomTheme(theme) {
     const themeId = generateCustomThemeId();
 
     // Re-read localStorage to get the latest state (a theme may have been
@@ -639,6 +639,37 @@ async function persistCustomTheme(theme) {
     customThemes = currentCustomThemes;
 
     return themeId;
+}
+
+// Persist an update to an existing custom theme, mirroring persistCustomTheme's
+// dual-store write (localStorage + IndexedDB) with rollback on failure.
+export async function updateCustomTheme(themeId, theme) {
+    const previous = localStorage.getItem('customThemes');
+    let map;
+    try {
+        map = JSON.parse(previous || '{}');
+        if (!map || typeof map !== 'object' || Array.isArray(map)) map = {};
+    } catch {
+        // Corrupt local copy — fall back to the module's last-known map
+        map = { ...customThemes };
+    }
+    map[themeId] = theme;
+    const { db } = await import('./indexeddb-storage.js');
+    let localChanged = false;
+    try {
+        await db.transaction('rw', db.settings, async () => {
+            await db.settings.put({ key: 'customThemes', value: map });
+            localStorage.setItem('customThemes', JSON.stringify(map));
+            localChanged = true;
+        });
+    } catch (error) {
+        if (localChanged) {
+            if (previous === null) localStorage.removeItem('customThemes');
+            else localStorage.setItem('customThemes', previous);
+        }
+        throw error;
+    }
+    customThemes = map;
 }
 
 async function applyNewTheme(themeId, themeName) {

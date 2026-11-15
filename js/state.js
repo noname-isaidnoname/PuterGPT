@@ -37,6 +37,63 @@ export const state = new Proxy({}, {
   }
 });
 
+// Decide whether a theme is dark enough to warrant dark chrome (data-theme,
+// syntax highlighting stylesheet, browser theme-color). Custom themes are
+// judged by their --bg-primary, since only the built-in themes have a known
+// mode. Unknown/unparseable backgrounds are treated as dark (the app's default).
+const SENTINEL_COLOR = '#000001';
+let canvasContextCache; // undefined = untried, null = unavailable
+
+function getColorCanvasContext() {
+    if (canvasContextCache !== undefined) return canvasContextCache;
+    try {
+        const canvas = document.createElement('canvas');
+        canvas.width = canvas.height = 1;
+        canvasContextCache = canvas.getContext('2d') || null;
+    } catch {
+        canvasContextCache = null;
+    }
+    return canvasContextCache;
+}
+
+export function cssColorToRgb(value) {
+    const v = (value || '').trim();
+    if (!v) return null;
+    const ctx = getColorCanvasContext();
+    if (!ctx) return null;
+    try {
+        ctx.fillStyle = SENTINEL_COLOR;
+        ctx.fillStyle = v; // invalid colors are ignored, leaving the sentinel
+        const out = String(ctx.fillStyle || '').toLowerCase();
+        if (!out) return null;
+        if (out === SENTINEL_COLOR && v.toLowerCase() !== SENTINEL_COLOR) return null;
+        let m = out.match(/^#([0-9a-f]{6})$/);
+        if (m) {
+            const hex = m[1];
+            return { r: parseInt(hex.slice(0, 2), 16), g: parseInt(hex.slice(2, 4), 16), b: parseInt(hex.slice(4, 6), 16) };
+        }
+        m = out.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*[\d.]+\s*)?\)$/);
+        if (m) return { r: Number(m[1]), g: Number(m[2]), b: Number(m[3]) };
+        return null;
+    } catch {
+        return null;
+    }
+}
+
+function relativeLuminance({ r, g, b }) {
+    const channel = (c) => {
+        const s = c / 255;
+        return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+    };
+    return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+}
+
+function themeIsDark(themeConfig) {
+    const rgb = cssColorToRgb(themeConfig?.cssVars?.['--bg-primary']);
+    if (!rgb) return true;
+    return relativeLuminance(rgb) < 0.5;
+}
+
 // Enhanced Safe JavaScript execution for themes
 export function executeThemeJS(code, themeName, hookName) {
     try {
@@ -169,21 +226,25 @@ export function applyTheme(theme) {
     clearAppliedThemeVars(root);
 
     // Remove any existing theme attribute
+    const isDark = themeIsDark(themeConfig);
     root.removeAttribute('data-theme');
-    root.setAttribute('data-theme', themeName === 'dark' ? 'dark' : 'light');
+    root.setAttribute('data-theme', isDark ? 'dark' : 'light');
 
-    // Keep the syntax-highlight stylesheet in sync with the built-in themes
+    // Keep the syntax-highlight stylesheet in sync (custom themes included)
     const hljsLink = document.getElementById('hljs-theme');
     if (hljsLink) {
         const darkHljs = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css';
         const lightHljs = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css';
-        hljsLink.href = themeName === 'dark' ? darkHljs : lightHljs;
+        hljsLink.href = isDark ? darkHljs : lightHljs;
     }
 
-    // Keep the browser chrome color in sync
+    // Keep the browser chrome color in sync (theme's own background when it parses)
     const themeColorMeta = document.querySelector('meta[name="theme-color"]');
     if (themeColorMeta) {
-        themeColorMeta.content = themeName === 'dark' ? '#151518' : '#ffffff';
+        const bgValue = (themeConfig.cssVars?.['--bg-primary'] || '').trim();
+        themeColorMeta.content = bgValue && cssColorToRgb(bgValue)
+            ? bgValue
+            : (isDark ? '#151518' : '#ffffff');
     }
 
     // Apply CSS variables
