@@ -37,13 +37,16 @@ async function saveChatToStorage() {
     
     const chatData = {
         id: state.currentChatId,
-        title: title,
-        messages: state.messages,
+        title,
+        messages: structuredClone(state.messages),
         lastModified: Date.now(),
         systemPrompt: initialSystemPrompt
     };
 
-    await db.chats.put(chatData);
+    await db.transaction('rw', db.chats, async () => {
+        const existing = await db.chats.get(chatData.id);
+        await db.chats.put({ ...existing, ...chatData, title: existing?.title || title });
+    });
     await loadSavedChats();
 
     // Rebuild search index when chat is saved
@@ -51,19 +54,22 @@ async function saveChatToStorage() {
 }
 
 export async function getSavedChats() {
-    return await db.chats.orderBy('lastModified').reverse().toArray();
+    const chats = await db.chats.orderBy('lastModified').reverse().toArray();
+    return chats.sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned));
 }
 
 export async function loadSavedChats() {
     const chats = await getSavedChats();
     els.savedChatsContainer.innerHTML = '';
     
-    if (chats.length === 0) {
-        els.savedChatsContainer.innerHTML = '<div class="saved-chats-empty">No saved chats yet.</div>';
+    const query = document.getElementById('sidebar-filter').value.trim().toLocaleLowerCase();
+    const visible = chats.filter(chat => (chat.title || '').toLocaleLowerCase().includes(query));
+    if (visible.length === 0) {
+        els.savedChatsContainer.textContent = query ? 'No matching chats.' : 'No saved chats yet.';
         return;
     }
 
-    chats.forEach(chat => {
+    visible.forEach(chat => {
         const div = document.createElement('div');
         div.className = 'chat-item';
         if (chat.id === state.currentChatId) div.classList.add('active');
@@ -85,6 +91,14 @@ export async function loadSavedChats() {
             window.showChatContextMenu(e, chat.id);
         };
 
+        if (chat.pinned) {
+            const pin = document.createElement('span');
+            pin.className = 'material-icons-outlined';
+            pin.style.fontSize = '16px';
+            pin.textContent = 'push_pin';
+            pin.title = 'Pinned';
+            div.appendChild(pin);
+        }
         div.appendChild(titleSpan);
         div.appendChild(moreBtn);
 
@@ -128,12 +142,25 @@ async function renameChat(id, newTitle) {
     if (!newTitle.trim()) return;
     const chat = await db.chats.get(id);
     if (chat) {
-        chat.title = newTitle;
-        await db.chats.put(chat);
+        await db.chats.update(id, { title: newTitle, manuallyRenamed: true });
         await loadSavedChats();
         emit('toast:show', "Chat renamed");
     }
 }
+
+window.toggleChatPin = async id => {
+    try {
+        await db.transaction('rw', db.chats, async () => {
+            const chat = await db.chats.get(id);
+            if (chat) await db.chats.update(id, { pinned: !chat.pinned });
+        });
+        await loadSavedChats();
+    } catch (error) {
+        if (!reportStorageError(error)) emit('toast:show', 'Failed to update pin', 'error');
+    }
+};
+
+document.getElementById('sidebar-filter').addEventListener('input', loadSavedChats);
 
 // Wire up listeners
 on('chats:refresh-needed', () => {

@@ -18,6 +18,12 @@ db.version(1).stores({
     settings: 'key, value'
 });
 
+db.version(2).stores({
+    chats: 'id, title, lastModified, pinned',
+    tokens: 'id, name, value, token, status',
+    settings: 'key, value'
+});
+
 export { db };
 
 export async function migrateFromLocalStorage() {

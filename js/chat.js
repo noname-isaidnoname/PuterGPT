@@ -64,6 +64,7 @@ export async function sendMessage() {
 }
 
 async function processUserTurn(text) {
+    const isNewChat = !state.currentChatId && state.messages.length === 0;
     if (!state.currentChatId) {
         setState({ currentChatId: generateUniqueId() });
     }
@@ -119,6 +120,6 @@ async function processUserTurn(text) {
     emit('message:append', state.messages.length - 1, newMessage);
     emit('chat:save');
 
-    await import('./chat-api.js').then(m => m.triggerAssistantResponse());
+    await import('./chat-api.js').then(m => m.triggerAssistantResponse({ autoTitle: isNewChat }));
 }
 

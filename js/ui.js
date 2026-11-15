@@ -162,6 +162,7 @@ export function showChatContextMenu(e, chatId) {
     activeContextChatId = chatId;
     hideContextMenu(); // ensure any stale outside-click listener is removed
     contextMenu.classList.add('active');
+    document.getElementById('context-pin-label').textContent = 'Pin / unpin chat';
 
     // Position menu
     const rect = e.currentTarget.getBoundingClientRect();
@@ -212,6 +213,11 @@ window.handleDeleteChat = () => {
 
 window.handleExportChat = () => {
     emit('chat:export-json', activeContextChatId);
+    hideContextMenu();
+};
+
+window.handleTogglePinChat = () => {
+    window.toggleChatPin(activeContextChatId);
     hideContextMenu();
 };
 

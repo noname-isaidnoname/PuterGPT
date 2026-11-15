@@ -158,6 +158,7 @@
             </button>
 
             <div class="saved-chats-label">Saved Chats</div>
+            <input type="text" id="sidebar-filter" placeholder="Filter chats" aria-label="Filter chats">
             <div id="saved-chats-container" class="saved-chats-list">
                 <!-- Chat items injected here -->
                 <div class="saved-chats-empty">No saved chats yet.</div>
@@ -341,6 +342,16 @@
                                 <span class="switch-track"></span>
                             </label>
                         </div>
+                        <div class="settings-toggle-row">
+                            <div class="settings-toggle-text">
+                                <span class="settings-toggle-label">Auto-name new chats</span>
+                                <span class="settings-toggle-desc">Use a free model to name a new conversation after its first response. Saved immediately.</span>
+                            </div>
+                            <label class="switch">
+                                <input type="checkbox" id="auto-name-chats" checked aria-label="Auto-name new chats">
+                                <span class="switch-track"></span>
+                            </label>
+                        </div>
                     </section>
 
                     <!-- Model Panel -->
@@ -513,6 +524,10 @@
         <div class="context-item" onclick="handleExportChat()">
             <span class="material-icons-outlined" style="font-size:18px">download</span>
             Export as JSON
+        </div>
+        <div class="context-item" onclick="handleTogglePinChat()">
+            <span class="material-icons-outlined" style="font-size:18px">push_pin</span>
+            <span id="context-pin-label">Pin chat</span>
         </div>
         <div class="context-item" onclick="handleExportMarkdown()">
             <span class="material-icons-outlined" style="font-size:18px">description</span>

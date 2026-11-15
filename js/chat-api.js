@@ -7,6 +7,7 @@ import { emit } from './event-bus.js';
 import { decorateCodeBlocks } from './chat-ui.js';
 import { getMessageText } from './utils.js';
 import { sanitizeHtml } from './sanitize.js';
+import { db } from './indexeddb-storage.js';
 
 /**
  * Generation is tracked explicitly in the store as `state.isGenerating`
@@ -66,7 +67,7 @@ function settleGeneration() {
     setState({ isGenerating: false, lastOperationId: null, abortController: null });
 }
 
-export async function triggerAssistantResponse() {
+export async function triggerAssistantResponse({ autoTitle = false } = {}) {
     if (state.isGenerating) {
         console.warn('Assistant response already in progress, ignoring duplicate request');
         return;
@@ -76,6 +77,9 @@ export async function triggerAssistantResponse() {
     setState({ isGenerating: true });
 
     const ctx = createStreamContext();
+    ctx.autoTitle = autoTitle;
+    ctx.chatId = state.currentChatId;
+    ctx.firstUserText = autoTitle ? getMessageText(state.messages[0]).slice(0, 2000) : '';
     // Register immediately so abortAssistantResponse() can finalize even if the
     // abort lands before the bubble / operation id are set up.
     activeStream = ctx;
@@ -275,9 +279,49 @@ function handleComplete(ctx, final, { inputTokens, currentModel, currentToken, o
     emit('chat:save');
 
     settleGeneration();
+    if (ctx.autoTitle && finalContent) {
+        generateChatTitle(ctx.chatId, ctx.firstUserText, finalContent.slice(0, 2000));
+    }
 
     if (currentToken && (currentToken.value || currentToken.token)) {
         tokenManager.markTokenSuccess(currentToken.value || currentToken.token);
+    }
+}
+
+async function generateChatTitle(chatId, userText, assistantText) {
+    try {
+        if ((await db.settings.get('auto_name_chats'))?.value === false) return;
+        // Never incur a paid completion solely for a title.
+        const model = state.models.find(m => m.costInfo?.isFree && m.costInfo.inputCost === 0 && m.costInfo.outputCost === 0);
+        if (!model) return;
+        const apiToken = await tokenManager.getApiToken();
+        if (!apiToken) return;
+        let title = '';
+        await streamPuterCompletion({
+            apiUrl: 'https://api.puter.com/drivers/call',
+            requestBody: {
+                interface: 'puter-chat-completion', driver: 'ai-chat', test_mode: true, method: 'complete',
+                args: { model: model.id, stream: true, messages: [
+                    { role: 'system', content: 'Write a concise title of at most six words for this conversation. Return only the title.' },
+                    { role: 'user', content: `User: ${userText}\n\nAssistant: ${assistantText}` }
+                ] }
+            },
+            headers: buildRequestHeaders(apiToken),
+            onComplete: final => { title = final.accumulatedContent || ''; },
+            onError: () => {}
+        });
+        title = title.trim().replace(/^["'`#\s]+|["'`\s]+$/g, '').split(/\s+/).slice(0, 6).join(' ').slice(0, 100);
+        if (!title) return;
+        await db.transaction('rw', db.chats, async () => {
+            const chat = await db.chats.get(chatId);
+            if (!chat || chat.manuallyRenamed || chat.importedAt || chat.sharedAt
+                || getMessageText(chat.messages[0]).slice(0, 2000) !== userText
+                || getMessageText(chat.messages[1]).slice(0, 2000) !== assistantText) return;
+            await db.chats.update(chatId, { title, autoNamed: true });
+        });
+        emit('chats:refresh-needed');
+    } catch (error) {
+        console.warn('Could not generate chat title:', error);
     }
 }
 

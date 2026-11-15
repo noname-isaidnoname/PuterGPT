@@ -146,6 +146,47 @@ async function main() {
     return true;
   }, sel);
 
+  scenario('Sidebar pin and filtering preserve chat metadata', async () => {
+    const page = await newPage();
+    try {
+      await page.evaluate(async () => {
+        const { db } = await import('./js/indexeddb-storage.js');
+        await db.chats.bulkPut([
+          { id: 'a', title: 'Alpha', messages: [], lastModified: 1 },
+          { id: 'b', title: 'Beta', messages: [], lastModified: 2 }
+        ]);
+        await window.toggleChatPin('a');
+      });
+      check(await page.locator('.chat-item').first().getAttribute('data-id') === 'a', 'Pinned chat sorts first');
+      await page.fill('#sidebar-filter', 'ALP');
+      await page.waitForFunction(() => document.querySelectorAll('.chat-item').length === 1);
+      check(await page.locator('.chat-item').first().getAttribute('data-id') === 'a', 'Filter matches titles case-insensitively');
+      check(await page.evaluate(async () => (await (await import('./js/indexeddb-storage.js')).db.chats.get('a')).pinned), 'Pin is persisted');
+    } finally {
+      await page.close();
+    }
+  });
+
+  scenario('Auto-title runs once on a new chat', async () => {
+    let titleCalls = 0;
+    const page = await newPage(async route => {
+      const body = route.request().postDataJSON();
+      const isTitle = body.args.messages[0].content.includes('at most six words');
+      if (isTitle) titleCalls++;
+      await route.fulfill({ status: 200, contentType: 'application/x-ndjson',
+        body: isTitle ? '{"type":"text","text":"A Helpful Title"}\n' : NDJSON_OK });
+    });
+    try {
+      await seedToken(page);
+      await page.fill('#user-input', 'Hello');
+      await page.press('#user-input', 'Enter');
+      await page.waitForFunction(() => document.querySelector('.chat-title')?.textContent === 'A Helpful Title', null, { timeout: 10000 });
+      check(titleCalls === 1, `One title completion generated after first answer (got ${titleCalls})`);
+    } finally {
+      await page.close();
+    }
+  });
+
   scenario('Backup restores conflicts and excludes tokens by default', async () => {
     const page = await newPage();
     try {

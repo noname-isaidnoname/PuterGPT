@@ -24,6 +24,16 @@ async function bootstrap() {
     await migrateFromLocalStorage();
     await bootstrapThemes();
     await import('./state.js').then(m => m.loadSettingsFromDB());
+    const autoName = document.getElementById('auto-name-chats');
+    autoName.checked = (await db.settings.get('auto_name_chats'))?.value !== false;
+    autoName.addEventListener('change', async () => {
+        try {
+            await db.settings.put({ key: 'auto_name_chats', value: autoName.checked });
+        } catch (error) {
+            autoName.checked = !autoName.checked;
+            emit('toast:show', 'Could not save auto-name setting', 'error');
+        }
+    });
     await initializeTokenManagement();
     renderThemeCards();
 

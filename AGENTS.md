@@ -25,7 +25,7 @@ Plain ES modules loaded with `<script type="module" src="js/app.js">`. Globals r
 | `js/chat-ui.js` | `renderMessage()` (the message DOM), `decorateCodeBlocks()` (adds the `.code-block-header` banner with language label + copy/Run buttons), `reRenderAllMessages()` |
 | `js/chat-edit.js` | edit mode: `window.enterEditMode(index)`, save / save+regenerate / cancel |
 | `js/token-manager.js`, `js/token-ui*.js` | token vault, rotation, list UI, quick-register |
-| `js/storage.js`, `js/indexeddb-storage.js` | persistence: IndexedDB **'PuterGPT'** via Dexie — stores `chats`, `tokens`, `settings`. One-off migration of legacy `puter_*` localStorage keys runs on boot |
+| `js/storage.js`, `js/indexeddb-storage.js` | persistence: IndexedDB **'PuterGPT'** via Dexie — stores `chats`, `tokens`, `settings`; schema v2 adds a chat pin index. Chat writes preserve stored metadata, including titles and pins. One-off migration of legacy `puter_*` localStorage keys runs on boot |
 | `js/theme-generator.js`, `js/theme-ui.js` | AI/custom themes: prompts, JS-effects execution (`executeThemeJS`), dropdown population |
 | `js/models.js`, `js/compression.js` | model list + pricing; lz-string compression for share links |
 | `js/search.js`, `js/search-ui.js`, `css/search.css` | full-text search. The Advanced Search modal mirrors the settings modal chrome (`.search-header`/`.search-body`/`.search-footer`, reuses `.settings-close` and `.settings-badge`); close keeps the query + results (resynced on next open) |
