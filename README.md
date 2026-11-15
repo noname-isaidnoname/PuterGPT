@@ -1,96 +1,65 @@
 # PuterGPT
 
-A browser-based AI chat client for [Puter.ai](https://puter.ai) models. No build step, no server needed — just open the page and start talking.
+A browser-based AI chat client for [Puter.ai](https://puter.ai) models. PuterGPT is a static HTML, CSS, and vanilla JavaScript app: there is no build step, application server, or framework.
 
-All your chats, tokens, and themes live in your browser's IndexedDB. Nothing gets sent anywhere except the API calls to Puter.ai.
-
----
+**[Open PuterGPT](https://noname-isaidnoname.github.io/PuterGPT/)**
 
 ## Get started
 
-Open the app: **[noname-isaidnoname.github.io/PuterGPT](https://noname-isaidnoname.github.io/PuterGPT/)**
+1. Open **Settings & AI Config** in the sidebar.
+2. Add a Puter API token under **Tokens**, or use **Quick Register**.
+3. Choose a model and start a chat.
 
-1. Click **Settings & AI Config** in the sidebar
-2. Add a Puter.ai API token (or click "Quick Register" to get one)
-3. Pick a model and start typing
-
-Or run it locally:
+To run a local copy, serve the files from this directory:
 
 ```bash
 git clone https://github.com/noname-isaidnoname/PuterGPT.git
 cd PuterGPT
-python -m http.server 8000
-# or: npx http-server -p 8000
-# or: php -S localhost:8000
+python3 -m http.server 8000
 ```
 
-Then open `http://localhost:8000` in your browser.
-
----
+Open `http://localhost:8000`. A secure context such as HTTPS or localhost is needed for features including service workers and some clipboard and speech APIs.
 
 ## Features
 
-- **Chat with multiple AI models** — switch between available Puter.ai models, each with its own pricing
-- **Image support** — upload, paste, or drag-and-drop images into the chat for vision-capable models
-- **Web search** — toggle search on supported models so the AI can pull in live results
-- **Streaming responses** — replies show up as they're generated, not all at once
-- **Edit & regenerate** — tweak previous messages and re-roll the response
-- **Chat history** — saved automatically in IndexedDB. Export or import individual chats
-- **Themes** — comes with dark and light themes. You can also describe a theme in plain English and let the AI build one for you (with optional JS effects)
-- **Token management** — add multiple tokens, rotate them automatically when one runs out, import/export the list
-- **Cost tracking** — shows estimated token usage per message
-- **Code execution** — run JavaScript code blocks inline (sandboxed)
-- **Responsive** — works on phones, has a collapsible sidebar
+- **Models and streaming:** Choose a Puter model, watch responses stream, stop generation, and see estimated costs. Supported models can use images and web search.
+- **Per-chat parameters:** Set temperature and a maximum output-token limit in Settings → Model. Blank fields use model defaults; support and limits vary by model.
+- **Edit and experiment:** Edit messages and regenerate. Enable experimental **Response variants** in Settings → General to retain alternative answers. Switching an older response requires confirmation before later dependent messages are removed.
+- **Compare models:** Use the composer’s Compare button to send the same prompt to two models with independent stop controls. Comparison requests may incur charges and their results are not saved to the chat.
+- **Organize and search:** Filter chat titles in the sidebar, pin conversations, and search saved chats. New chats can be named automatically using a free model when one is available.
+- **Backups and exports:** Export individual chats as JSON or Markdown, print a transcript, or use Settings → Data to export and merge a full backup. API tokens are excluded from backups unless explicitly selected. Backups and exports may contain prompts, images, and other private conversation data.
+- **Sharing and input:** Share a chat using the mobile share sheet when available, or copy its link. Supported browsers also offer voice input.
+- **Themes and tokens:** Choose a built-in theme or create a custom theme, manage multiple tokens, and opt in to token rotation. Custom themes can contain JavaScript effects; only import themes and backups you trust.
+- **Installable shell:** On supported browsers, install the app and reopen its cached interface offline. Generation and other Puter API operations still require a network connection. Updates wait for you to choose Reload.
+- **Keyboard access:** Press `?` or use **Keyboard shortcuts** in the sidebar for the full list. `Ctrl+K` focuses the chat filter, `Ctrl+,` opens settings, and `Ctrl+Shift+E` exports the current chat; use `Cmd` instead of `Ctrl` on macOS.
 
----
+## Data and privacy
 
-## How it works
+Chats, settings, and tokens are stored locally in IndexedDB; custom themes are also mirrored in localStorage. Clearing browser data removes local data, so keep a backup. Restore merges data and lets you keep existing records, overwrite them, or keep both chats and themes when IDs collide.
 
-The whole thing is static HTML, CSS, and vanilla JavaScript. No frameworks, no bundlers, no build step.
+Puter requests send the selected token and relevant prompts or attachments to Puter.ai. The app also loads libraries and fonts from CDNs, and Quick Register loads Puter's SDK. A chat share link contains the shared conversation in its URL; anyone with the link can read it. Token export, token-inclusive backups, and custom JavaScript effects are explicit features that can expose local data, so treat their outputs and sources as sensitive.
 
-- `js/store.js` — a tiny Zustand-like state manager that everything hooks into
-- `js/chat.js` / `js/chat-api.js` — handles sending messages and streaming responses from the Puter.ai API
-- `js/chat-ui.js` — renders messages, handles the input area, image attachments
-- `js/token-manager.js` — manages API tokens and rotation
-- `js/theme-generator.js` / `js/theme-ui.js` — handles themes: built-in, custom, and AI-generated
-- `js/storage.js` / `js/indexeddb-storage.js` — persistence layer
-- Everything is connected via a simple event bus (`js/event-bus.js`)
+## Known limitations
 
----
+- The app has no server-side chat sync; another browser or device needs an exported backup.
+- The service worker caches the app shell and available CDN assets, not API responses. Offline use does not generate answers.
+- Model support for generation parameters, image input, and web search varies. Comparison responses are read-only.
+- Browser support for native sharing, speech recognition, installation, and clipboard access varies.
+- In a websim.com iframe, browser permissions and embedding restrictions can affect these features; share links use the websim host when appropriate.
+- Legacy `puter_*` localStorage data is migrated to IndexedDB during startup when the corresponding database tables are empty. Existing database records are not replaced by that migration.
+- The app depends on third-party scripts and the Puter API. If a required library cannot load, a blocking error is shown instead of a partially functioning interface.
 
-## Configuration
+## Development and visual checks
 
-Open **Settings & AI Config** in the sidebar:
-
-- **System prompt** — set a base instruction the AI follows for every message
-- **Model** — pick which Puter.ai model to use
-- **Tokens** — add, remove, or reorder API tokens. Enable rotation so it falls back when one hits its limit
-- **Auto-scroll** — toggle whether the chat follows new messages
-- **Web search** — turn on for models that support it
-- **Theme** — pick dark/light or generate a custom one
-
----
-
-## Development
-
-Verification is headless (Node, no app dependencies) — see `tools/README.md`:
+See [CONTRIBUTING.md](CONTRIBUTING.md) and [tools/README.md](tools/README.md). The app needs no build or package installation; verification tools are separate:
 
 ```bash
-node tools/verify-all.js            # run all harnesses in parallel (~15s)
-node tools/verify-all.js --changed  # only harnesses affected by uncommitted changes
+node tools/verify-all.js
+node tools/verify-all.js --changed
 ```
 
-A pre-commit hook in `.githooks/` runs the `--changed` variant and blocks the commit on failure. Enable it with `sh tools/install-hooks.sh` (or `git config core.hooksPath .githooks`). Bypass in emergencies with `git commit --no-verify`.
+For screenshots of the current settings sidebar and theme cards, run `node tools/verify-settings.js --backend playwright`. The harness writes `settings-general.png` and `settings-appearance.png` to the screenshot directory shown in its output (by default `$TMPDIR/putergpt-tools`); `node tools/verify-mobile.js --backend playwright` captures mobile views. Screenshots are verification artifacts, not checked into the repository.
 
----
+## Project
 
-## Notes
-
-- The app is entirely client-side. Your API tokens never leave your browser (except when they're sent to Puter.ai as part of a request)
-- Chat history is stored in IndexedDB. Clearing your browser data will wipe it — export anything you want to keep
-- Built-in themes can't be deleted. Custom themes can
-- If something breaks, check the browser console. Most issues are either a bad token or a network problem
-
----
-
-Project is on [GitHub](https://github.com/noname-isaidnoname/PuterGPT). Open an issue if something's broken or missing.
+Source and issue tracker: [github.com/noname-isaidnoname/PuterGPT](https://github.com/noname-isaidnoname/PuterGPT).
