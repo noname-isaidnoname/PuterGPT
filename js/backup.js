@@ -1,4 +1,4 @@
-import { db } from './indexeddb-storage.js';
+import { db, reportStorageError } from './indexeddb-storage.js';
 import { downloadJsonFile, createModal } from './modal-helper.js';
 import { emit } from './event-bus.js';
 import { generateUniqueId } from './utils.js';
@@ -61,7 +61,15 @@ function validateBackup(data) {
 
 export async function createBackup(includeTokens = false) {
     const snapshot = await db.transaction('r', db.chats, db.settings, db.tokens, async () => {
-        const chats = await db.chats.toArray();
+        const chats = (await db.chats.toArray()).map(chat => {
+            // Older imports wrote these optional fields as undefined; JSON
+            // cannot represent that value, and it means the field was absent.
+            const copy = { ...chat };
+            for (const key of ['originalExportedAt', 'sharedAt']) {
+                if (copy[key] === undefined) delete copy[key];
+            }
+            return copy;
+        });
         const rows = await db.settings.toArray();
         const tokens = includeTokens ? await db.tokens.toArray() : undefined;
         if (rows.some(row => !isObject(row) || typeof row.key !== 'string')) throw new Error('Invalid settings records');
@@ -78,11 +86,12 @@ export async function createBackup(includeTokens = false) {
             const existing = index < 0 ? null : chats[index];
             const firstUser = state.messages.find(message => message.role === 'user');
             const text = getMessageText(firstUser);
-            const current = { ...existing, id: state.currentChatId,
-                title: existing?.title || (text ? text.substring(0, 25) + (text.length > 25 ? '...' : '') : 'New Chat'),
+            const pending = state.pendingChatData?.id === state.currentChatId ? state.pendingChatData : null;
+            const current = { ...existing, ...pending, id: state.currentChatId,
+                title: pending?.title || existing?.title || (text ? text.substring(0, 25) + (text.length > 25 ? '...' : '') : 'New Chat'),
                 lastModified: Date.now(), messages: state.messages,
                 generationParams: state.generationParams,
-                systemPrompt: existing?.systemPrompt ?? firstUser?.systemPrompt ?? state.config.systemPrompt };
+                systemPrompt: pending?.systemPrompt ?? existing?.systemPrompt ?? firstUser?.systemPrompt ?? state.config.systemPrompt };
             if (index < 0) chats.push(current);
             else chats[index] = current;
         }
@@ -200,7 +209,7 @@ document.getElementById('backup-input').addEventListener('change', async event =
                 location.reload();
             } catch (error) {
                 event.currentTarget.disabled = false;
-                emit('toast:show', `Restore failed: ${error.message}`, 'error');
+                if (!reportStorageError(error)) emit('toast:show', `Restore failed: ${error.message}`, 'error');
             }
         };
     } catch (error) {

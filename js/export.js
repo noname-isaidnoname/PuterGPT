@@ -1,6 +1,6 @@
 import { generateUniqueId } from './utils.js';
 import { generateShareUrl } from './compression.js';
-import { db } from './indexeddb-storage.js';
+import { db, reportStorageError } from './indexeddb-storage.js';
 import { setState } from './store.js';
 import { downloadJsonFile } from './modal-helper.js';
 import { emit, on } from './event-bus.js';
@@ -166,50 +166,50 @@ async function shareChat(chatId) {
     }
 }
 
-export function loadSharedChat() {
+export async function loadSharedChat() {
     try {
-        // Compression is already a direct import; this dynamic import is just to keep the
-        // existing call site (export.js → compression.js) lazy.
-        import('./compression.js').then(({ parseSharedUrl }) => {
-            const sharedData = parseSharedUrl();
+        const { parseSharedUrl } = await import('./compression.js');
+        const sharedData = parseSharedUrl();
 
-            if (sharedData && sharedData.messages) {
-                const newChatId = generateUniqueId();
-                // Stop any in-flight generation before swapping the transcript.
-                abortAssistantResponse();
+        if (sharedData && Array.isArray(sharedData.messages)) {
+            const newChatId = generateUniqueId();
+            // Stop any in-flight generation before swapping the transcript.
+            abortAssistantResponse();
 
-                const chatData = {
-                    id: newChatId,
-                    title: sharedData.title || 'Shared Chat',
-                    messages: sharedData.messages,
-                    lastModified: Date.now(),
-                    sharedAt: sharedData.sharedAt,
-                    importedAt: new Date().toISOString()
-                };
+            const chatData = {
+                id: newChatId,
+                title: sharedData.title || 'Shared Chat',
+                messages: sharedData.messages,
+                lastModified: Date.now(),
+                ...(sharedData.sharedAt !== undefined && { sharedAt: sharedData.sharedAt }),
+                importedAt: new Date().toISOString()
+            };
 
-                setState({
-                    currentChatId: newChatId,
-                    generationParams: normalizeGenerationParams(null),
-                    messages: sharedData.messages,
-                    attachedImages: []
-                });
+            setState({
+                currentChatId: newChatId,
+                pendingChatData: chatData,
+                generationParams: normalizeGenerationParams(null),
+                messages: sharedData.messages,
+                attachedImages: []
+            });
 
-                db.chats.put(chatData).then(() => {
-                    emit('messages:rerender');
-                    emit('chats:refresh-needed');
-                    emit('search:rebuild');
-                    emit('toast:show', `Loaded and saved shared chat: ${chatData.title} (${sharedData.messages.length} messages)`, 'success');
-                    window.history.replaceState(null, null, window.location.pathname);
-                });
-            }
-        });
+            emit('messages:rerender');
+            await db.chats.put(chatData);
+            setState(s => s.currentChatId === newChatId && s.pendingChatData === chatData ? { pendingChatData: null } : {});
+            emit('chats:refresh-needed');
+            emit('search:rebuild');
+            emit('toast:show', `Loaded and saved shared chat: ${chatData.title} (${sharedData.messages.length} messages)`, 'success');
+            window.history.replaceState(null, null, window.location.pathname);
+        }
     } catch (error) {
-        console.error('Failed to load shared chat:', error);
-        emit('toast:show', 'Failed to load shared conversation', 'error');
+        if (!reportStorageError(error)) {
+            console.error('Failed to load shared chat:', error);
+            emit('toast:show', 'Failed to load shared conversation', 'error');
+        }
     }
 }
 
-export function importChatFromJson(jsonData) {
+export async function importChatFromJson(jsonData) {
     try {
         // Validate the imported data structure
         if (!jsonData || typeof jsonData !== 'object') {
@@ -236,7 +236,7 @@ export function importChatFromJson(jsonData) {
             messages: jsonData.messages,
             lastModified: Date.now(),
             importedAt: new Date().toISOString(),
-            originalExportedAt: jsonData.exportedAt,
+            ...(jsonData.exportedAt !== undefined && { originalExportedAt: jsonData.exportedAt }),
             // Preserve the original starting system prompt for reference.
             // It is NOT used as the active system prompt going forward.
             systemPrompt: typeof jsonData.systemPrompt === 'string' ? jsonData.systemPrompt : '',
@@ -245,20 +245,23 @@ export function importChatFromJson(jsonData) {
 
         setState({
             currentChatId: newChatId,
+            pendingChatData: chatData,
             generationParams: normalizeGenerationParams(jsonData.generationParams),
             messages: jsonData.messages,
             attachedImages: []
         });
 
-        db.chats.put(chatData).then(() => {
-            emit('messages:rerender');
-            emit('chats:refresh-needed');
-            emit('search:rebuild');
-            const msgCount = jsonData.messageCount || jsonData.messages.length;
-            emit('toast:show', `Imported and saved chat: ${chatData.title} (${msgCount} messages)`, 'success');
-        });
+        emit('messages:rerender');
+        await db.chats.put(chatData);
+        setState(s => s.currentChatId === newChatId && s.pendingChatData === chatData ? { pendingChatData: null } : {});
+        emit('chats:refresh-needed');
+        emit('search:rebuild');
+        const msgCount = jsonData.messageCount || jsonData.messages.length;
+        emit('toast:show', `Imported and saved chat: ${chatData.title} (${msgCount} messages)`, 'success');
     } catch (error) {
-        console.error('Failed to import chat:', error);
-        emit('toast:show', `Failed to import chat: ${error.message}`, 'error');
+        if (!reportStorageError(error)) {
+            console.error('Failed to import chat:', error);
+            emit('toast:show', `Failed to import chat: ${error.message}`, 'error');
+        }
     }
 }

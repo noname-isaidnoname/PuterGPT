@@ -272,6 +272,7 @@ const useAppStore = createStore((set, get) => ({
   // Chat state
   messages: [],
   currentChatId: null,
+  pendingChatData: null,
   generationParams: { temperature: null, maxTokens: null },
   variantsEnabled: false,
   attachedImages: [], // Array of { file, dataUrl, name } objects
@@ -331,6 +332,7 @@ const useAppStore = createStore((set, get) => ({
   // Reset chat state for new chat
   newChat: () => set({ 
     currentChatId: null, 
+    pendingChatData: null,
     generationParams: { temperature: null, maxTokens: null },
     messages: [], 
     attachedImages: [] 
@@ -339,6 +341,7 @@ const useAppStore = createStore((set, get) => ({
   // Load chat data
   loadChat: (chatData) => set({
     currentChatId: chatData.id,
+    pendingChatData: null,
     generationParams: chatData.generationParams || { temperature: null, maxTokens: null },
     messages: chatData.messages,
     attachedImages: []

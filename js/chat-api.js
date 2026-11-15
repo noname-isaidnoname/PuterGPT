@@ -7,7 +7,7 @@ import { emit } from './event-bus.js';
 import { decorateCodeBlocks } from './chat-ui.js';
 import { getMessageText } from './utils.js';
 import { sanitizeHtml } from './sanitize.js';
-import { db } from './indexeddb-storage.js';
+import { db, reportStorageError } from './indexeddb-storage.js';
 import { normalizeGenerationParams } from './generation-params.js';
 import { addResponseVariant } from './variants.js';
 
@@ -344,7 +344,7 @@ async function generateChatTitle(chatId, userText, assistantText) {
         });
         emit('chats:refresh-needed');
     } catch (error) {
-        console.warn('Could not generate chat title:', error);
+        if (!reportStorageError(error)) console.warn('Could not generate chat title:', error);
     }
 }
 

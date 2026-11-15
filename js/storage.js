@@ -17,6 +17,7 @@ subscribe((newState, prevState) => {
 
 async function saveChatToStorage() {
     if (!state.currentChatId || state.messages.length === 0) return;
+    const pending = state.pendingChatData?.id === state.currentChatId ? state.pendingChatData : null;
     
     let title = "New Chat";
     const firstUserMsg = state.messages.find(m => m.role === 'user');
@@ -32,9 +33,9 @@ async function saveChatToStorage() {
     // per-message snapshots.
     const initialSystemPrompt = (firstUserMsg && firstUserMsg.systemPrompt !== undefined)
         ? firstUserMsg.systemPrompt
-        : (state.config && typeof state.config.systemPrompt === 'string'
+        : (pending?.systemPrompt ?? (state.config && typeof state.config.systemPrompt === 'string'
             ? state.config.systemPrompt
-            : '');
+            : ''));
     
     const chatData = {
         id: state.currentChatId,
@@ -47,8 +48,9 @@ async function saveChatToStorage() {
 
     await db.transaction('rw', db.chats, async () => {
         const existing = await db.chats.get(chatData.id);
-        await db.chats.put({ ...existing, ...chatData, title: existing?.title || title });
+        await db.chats.put({ ...existing, ...pending, ...chatData, title: existing?.title || pending?.title || title });
     });
+    if (state.pendingChatData === pending && pending) setState({ pendingChatData: null });
     await loadSavedChats();
 
     // Rebuild search index when chat is saved
@@ -117,6 +119,7 @@ window.loadChat = async function(id) {
         abortAssistantResponse();
         setState({
             currentChatId: chat.id,
+            pendingChatData: null,
             generationParams: normalizeGenerationParams(chat.generationParams),
             messages: chat.messages,
             attachedImages: []
@@ -177,6 +180,7 @@ on('chat:new-requested', () => {
     setState({
         messages: [],
         currentChatId: null,
+        pendingChatData: null,
         generationParams: normalizeGenerationParams(null),
         attachedImages: []
     });

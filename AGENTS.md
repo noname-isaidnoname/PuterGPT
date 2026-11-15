@@ -56,6 +56,8 @@ Custom properties are the whole theme system (built-ins `dark` = default, `light
 
 Per-chat `generationParams` are normalized on load, reset on new/shared chats, and included in backups and single-chat JSON export. Unset values are omitted from Puter requests. Puter documents `temperature` and `max_tokens`, but some models ignore temperature or enforce model-specific limits.
 
+When an imported or shared chat cannot be saved, `pendingChatData` preserves its record metadata alongside the visible in-memory transcript so an export backup can recover it. Successful saves clear it; transcript swaps clear or replace it. Custom-theme deletion updates IndexedDB and its localStorage mirror together, retaining the original theme if a write fails.
+
 **Untrusted HTML never reaches `innerHTML` raw.** `marked.parse(...)` output must go through `sanitizeHtml()` (`js/sanitize.js`, allowlist-based — strips scripts, event handlers, non-image `data:` URLs, forms/iframes). Reasoning text is escaped, not interpolated. Same rule applies to imported/shared chats and token names.
 
 ## Message markup contract (easy to break)

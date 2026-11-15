@@ -1,5 +1,5 @@
 import { els, state, hasSettingsChanged, resetSettingsToOriginal } from './state.js';
-import { db } from './indexeddb-storage.js';
+import { db, reportStorageError } from './indexeddb-storage.js';
 import { setState, getState, subscribe, themeDefinitions } from './store.js';
 import { emit, on } from './event-bus.js';
 import { abortAssistantResponse } from './chat-api.js';
@@ -245,6 +245,7 @@ window.newChat = () => {
     setState({
         messages: [],
         currentChatId: null,
+        pendingChatData: null,
         generationParams: normalizeGenerationParams(null),
         attachedImages: []
     });
@@ -393,7 +394,29 @@ window.deleteCustomTheme = () => {
 window.confirmDeleteTheme = async () => {
     const currentTheme = canDeleteCurrentTheme();
     if (!currentTheme) return;
-    
+    const previousLocal = localStorage.getItem('customThemes');
+    let localChanged = false;
+    try {
+        const customThemes = JSON.parse(previousLocal || '{}');
+        delete customThemes[currentTheme];
+        await db.transaction('rw', db.settings, async () => {
+            await db.settings.put({ key: 'customThemes', value: customThemes });
+            await db.settings.put({ key: 'theme', value: 'dark' });
+            localStorage.setItem('customThemes', JSON.stringify(customThemes));
+            localChanged = true;
+        });
+    } catch (error) {
+        if (localChanged) {
+            if (previousLocal === null) localStorage.removeItem('customThemes');
+            else localStorage.setItem('customThemes', previousLocal);
+        }
+        if (!reportStorageError(error)) {
+            console.error('Failed to delete custom theme:', error);
+            showToast('Failed to delete custom theme', 'error');
+        }
+        return;
+    }
+
     // Execute theme's onRemove JavaScript to clean up effects before deletion
     if (themeDefinitions[currentTheme]?.javascript?.onRemove) {
         try {
@@ -412,25 +435,10 @@ window.confirmDeleteTheme = async () => {
     // Delete from theme definitions
     delete themeDefinitions[currentTheme];
     
-    // Delete from localStorage
-    const customThemes = JSON.parse(localStorage.getItem('customThemes') || '{}');
-    delete customThemes[currentTheme];
-    localStorage.setItem('customThemes', JSON.stringify(customThemes));
-    
-    // Delete from IndexedDB
-    const { db } = await import('./indexeddb-storage.js');
-    const savedThemes = await db.settings.get('customThemes');
-    if (savedThemes && savedThemes.value) {
-        delete savedThemes.value[currentTheme];
-        await db.settings.put({ key: 'customThemes', value: savedThemes.value });
-    }
-    
     // Reset to the default (dark) theme
-    const { setState } = await import('./store.js');
     setState((state) => ({
         config: { ...state.config, theme: 'dark' }
     }));
-    await db.settings.put({ key: 'theme', value: 'dark' });
 
     // Apply dark theme
     const { applyTheme } = await import('./state.js');

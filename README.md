@@ -20,6 +20,33 @@ python3 -m http.server 8000
 
 Open `http://localhost:8000`. A secure context such as HTTPS or localhost is needed for features including service workers and some clipboard and speech APIs.
 
+## Interface overview
+
+Settings uses a sidebar for its sections and theme cards in Appearance:
+
+```mermaid
+flowchart LR
+    subgraph Settings
+        direction LR
+        subgraph Sections
+            General
+            Model
+            Tokens
+            Appearance
+            Data
+        end
+        subgraph AppearancePanel["Appearance — theme cards"]
+            Light["☀ Light"]
+            Dark["☾ Dark"]
+            Custom["Custom themes"]
+            Generate["＋ Generate"]
+        end
+        Appearance --> AppearancePanel
+    end
+```
+
+This is a schematic, not a screenshot. For current desktop and mobile screenshots, see [Development and visual checks](#development-and-visual-checks).
+
 ## Features
 
 - **Models and streaming:** Choose a Puter model, watch responses stream, stop generation, and see estimated costs. Supported models can use images and web search.

@@ -150,6 +150,94 @@ async function main() {
     return true;
   }, sel);
 
+  scenario('Quota failures preserve imported and shared chats for backup', async () => {
+    const page = await newPage();
+    try {
+      const imported = await page.evaluate(async () => {
+        const { db } = await import('./js/indexeddb-storage.js');
+        const { importChatFromJson } = await import('./js/export.js');
+        await db.chats.put({ id: 'legacy-import', title: 'Legacy import', messages: [], lastModified: 1, originalExportedAt: undefined });
+        const original = db.chats.put;
+        db.chats.put = () => Promise.reject(new DOMException('Full', 'QuotaExceededError'));
+        try {
+          await importChatFromJson({ title: 'Unsaved import', systemPrompt: 'Original prompt', messages: [{ role: 'user', content: 'Import content' }] });
+        } finally { db.chats.put = original; }
+        const { createBackup } = await import('./js/backup.js');
+        return JSON.parse(await createBackup()).chats;
+      });
+      check(imported.some(chat => chat.title === 'Unsaved import' && chat.systemPrompt === 'Original prompt'
+        && chat.messages[0].content === 'Import content'), 'Failed import remains recoverable with its metadata');
+      check(imported.some(chat => chat.title === 'Legacy import'), 'Legacy optional undefined fields do not prevent backup');
+      check((await page.locator('.toast-actionable').last().innerText()).includes('Storage is full'), 'Import quota error offers backup');
+      await page.evaluate(async () => (await import('./js/event-bus.js')).emit('chat:save'));
+      await page.waitForFunction(() => [...document.querySelectorAll('.chat-title')].some(el => el.textContent === 'Unsaved import'));
+      const retried = await page.evaluate(async () => {
+        const { db } = await import('./js/indexeddb-storage.js');
+        const { state } = await import('./js/state.js');
+        return { record: await db.chats.get(state.currentChatId), pending: state.pendingChatData };
+      });
+      check(retried.record.title === 'Unsaved import' && retried.record.systemPrompt === 'Original prompt'
+        && !!retried.record.importedAt && retried.pending === null, 'Retry saves original import metadata and clears pending record');
+      const shared = await page.evaluate(async () => {
+        const { db } = await import('./js/indexeddb-storage.js');
+        const { loadSharedChat } = await import('./js/export.js');
+        const data = { title: 'Unsaved shared chat', messages: [{ role: 'user', content: 'Shared content' }] };
+        history.replaceState(null, '', '#shared=' + window.LZString.compressToEncodedURIComponent(JSON.stringify(data)));
+        const original = db.chats.put;
+        db.chats.put = () => Promise.reject(new DOMException('Full', 'QuotaExceededError'));
+        try { await loadSharedChat(); } finally { db.chats.put = original; }
+        return { hash: location.hash, text: document.querySelector('#chat-container').textContent };
+      });
+      check(shared.hash.startsWith('#shared=') && shared.text.includes('Shared content'), 'Failed shared chat remains visible and share URL is retained');
+      const action = page.locator('.toast-actionable').last().getByRole('button', { name: 'Export backup' });
+      const [download] = await Promise.all([page.waitForEvent('download'), action.click()]);
+      const data = JSON.parse(fs.readFileSync(await download.path(), 'utf8'));
+      check(data.chats.some(chat => chat.title === 'Unsaved shared chat' && chat.messages[0].content === 'Shared content'), 'Quota action downloads backup containing unsaved shared chat');
+    } finally {
+      await page.close();
+    }
+  });
+
+  scenario('Quota failure rolls back custom-theme deletion', async () => {
+    const page = await newPage();
+    try {
+      const result = await page.evaluate(async () => {
+        const { db } = await import('./js/indexeddb-storage.js');
+        const { setState, getState, themeDefinitions } = await import('./js/store.js');
+        const themes = { 'custom-quota': { name: 'Quota theme', cssVars: { '--bg-primary': '#111111' } } };
+        localStorage.setItem('customThemes', JSON.stringify(themes));
+        await db.settings.put({ key: 'customThemes', value: themes });
+        await db.settings.put({ key: 'theme', value: 'custom-quota' });
+        themeDefinitions['custom-quota'] = themes['custom-quota'];
+        setState(s => ({ config: { ...s.config, theme: 'custom-quota' } }));
+        window.openDeleteThemeModal();
+        const original = db.settings.put;
+        db.settings.put = function (row) {
+          return row.key === 'theme' ? Promise.reject(new DOMException('Full', 'QuotaExceededError')) : original.call(this, row);
+        };
+        try { await window.confirmDeleteTheme(); } finally { db.settings.put = original; }
+        return {
+          local: JSON.parse(localStorage.getItem('customThemes')),
+          saved: (await db.settings.get('customThemes')).value,
+          theme: getState().config.theme,
+          definition: !!themeDefinitions['custom-quota'],
+          modalOpen: document.getElementById('delete-theme-modal').classList.contains('active')
+        };
+      });
+      check(!!result.local['custom-quota'] && !!result.saved['custom-quota'] && result.theme === 'custom-quota'
+        && result.definition && result.modalOpen, 'Failed deletion keeps theme and confirmation intact');
+      check(await page.locator('.toast-actionable').last().getByRole('button', { name: 'Export backup' }).count() === 1, 'Theme quota error offers backup');
+      await page.evaluate(() => window.confirmDeleteTheme());
+      const deleted = await page.evaluate(async () => ({
+        local: JSON.parse(localStorage.getItem('customThemes')),
+        saved: (await (await import('./js/indexeddb-storage.js')).db.settings.get('customThemes')).value
+      }));
+      check(!deleted.local['custom-quota'] && !deleted.saved['custom-quota'], 'Retry deletes both theme copies');
+    } finally {
+      await page.close();
+    }
+  });
+
   scenario('Share uses native mobile sheet and falls back safely', async () => {
     const page = await newPage(null, () => {
       window.__shareMode = 'success';
