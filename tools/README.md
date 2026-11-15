@@ -23,6 +23,26 @@ Lightpanda and falls back to Playwright:
 
 Screenshots land in `$TMPDIR/putergpt-tools` by default; nothing is written into the repo.
 
+## CDN asset cache
+
+The app loads a handful of pinned (SRI) CDN assets on every page boot (marked,
+highlight.js, lz-string, dexie, the hljs theme stylesheet, Google/Material fonts,
+and the `puterStream.js` ES-module import). Fresh browser contexts would otherwise
+re-download all of them on every scenario. The Playwright backend fulfills those
+requests from a disk cache instead — boots are faster and the harnesses are fully
+offline-capable once the cache is warm. Only the known CDN/font hosts are
+intercepted; `api.puter.com` (and everything else) passes through untouched, and
+Lightpanda has no route interception, so it still loads CDN assets from the
+network. Cache entries are kept for 7 days (mutable URLs revalidate), and on a
+network failure a stale entry is served rather than failing the run.
+
+- location: `~/.cache/putergpt-tools/cdn` — override with `PUTERGPT_CDN_CACHE_DIR`
+- TTL: 7 days — override with `PUTERGPT_CDN_CACHE_TTL_MS`
+- clear it by deleting the directory; the next run re-downloads (and re-verifies)
+
+The static repo server also sends `Cache-Control: max-age=60` so the reload-heavy
+scenarios don't re-download/re-parse local assets.
+
 ## Prerequisites
 
 - Node.js ≥ 21 (uses the built-in WebSocket client for the Lightpanda CDP backend — no dependencies at all)
@@ -56,6 +76,7 @@ Options (env vars or flags):
 - `--list` — print the planned harness list and exit
 - `--timeout SECONDS` / `VERIFY_TIMEOUT` — per-harness kill timeout (default 180s)
 - `EDGE_CONCURRENCY` — parallelism for verify-edge-cases scenarios (adaptive default 4–6; 1 = sequential)
+- `PUTERGPT_CDN_CACHE_DIR` / `PUTERGPT_CDN_CACHE_TTL_MS` — disk cache for the pinned CDN assets (see "CDN asset cache" above)
 - `--base-url URL` / `BASE_URL` — test against an already-running server instead of the built-in one (e.g. `BASE_URL=http://localhost:8765 node tools/verify-settings.js`)
 - `--screenshot-dir DIR` / `SCREENSHOT_DIR` — where screenshots go (default: `$TMPDIR/putergpt-tools`; ignored by the lightpanda backend). Harness output is a scratch artifact; if a screenshot is meant for the documentation, point this at `screenshots/` in the repo (or copy it there) so it can be committed and referenced from the docs
 - `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` — force a specific chromium binary
@@ -74,7 +95,7 @@ Bypass in emergencies: `git commit --no-verify`.
 ## Notes
 
 - The app boots without network (the model list falls back to cache/static defaults); the settings/theme/mobile harnesses never send chat messages, so no Puter API token is required.
-- `verify-edge-cases.js` is **Playwright-only** and fully offline — it mocks `api.puter.com/drivers/call` (canned NDJSON / 401 / hanging streams) and `puterai/chat/models/details` (canned model list). The 401 resource errors the browser logs are expected and filtered.
+- `verify-edge-cases.js` is **Playwright-only** and fully offline — it mocks `api.puter.com/drivers/call` (canned NDJSON / 401 / hanging streams) and `puterai/chat/models/details` (canned model list), and fulfills the pinned CDN assets from a disk cache (see "CDN asset cache"). The 401 resource errors the browser logs are expected and filtered. Its per-scenario PASS/FAIL lines include individual durations, which is the first place to look when the suite gets slower.
 - Lightpanda does not provide the request interception used by the generation scenarios. `verify-all.js` explicitly labels that harness `(playwright)` even when other checks use Lightpanda.
 - Each run is a fresh ephemeral browser context per scenario, so tests may freely mutate `localStorage`/IndexedDB — nothing persists.
 - Generation scenarios seed fake tokens directly via `tokenManager`; the dedicated token-name XSS and themed-dialog scenarios still exercise token creation through the UI.

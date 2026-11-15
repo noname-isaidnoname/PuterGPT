@@ -26,6 +26,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const crypto = require('crypto');
 const { execFileSync, spawn } = require('child_process');
 const { spawnSync } = require('child_process');
 
@@ -184,6 +185,71 @@ class LightpandaPage {
     }
 }
 
+/* ================= CDN asset cache ================= */
+
+// The app loads a handful of pinned (SRI) CDN assets on every page boot
+// (marked, hljs, lz-string, dexie, the hljs theme css, Google/Material fonts,
+// puterStream.js). Every scenario boots a fresh context, so each pays the
+// network round trips again. Cache responses on disk keyed by URL and fulfill
+// from the cache, which also makes the harnesses fully offline-capable.
+// Only known CDN/font hosts are intercepted; api.puter.com and anything else
+// passes through untouched. Requires a Playwright route-capable target
+// (BrowserContext or Page) — lightpanda has no route interception.
+const CDN_CACHE_DIR = process.env.PUTERGPT_CDN_CACHE_DIR
+    || path.join(os.homedir(), '.cache', 'putergpt-tools', 'cdn');
+// Pinned version URLs never change, but a couple of hosts serve mutable
+// content (e.g. the GitHub Pages puterStream.js import). Revalidate after
+// a week; on network failure a stale entry is used rather than failing.
+const CDN_CACHE_TTL_MS = Number(process.env.PUTERGPT_CDN_CACHE_TTL_MS || 7 * 24 * 3600 * 1000);
+const CDN_ROUTE_RE = /^https:\/\/(cdn\.jsdelivr\.net|cdnjs\.cloudflare\.com|unpkg\.com|fonts\.googleapis\.com|fonts\.gstatic\.com|noname-isaidnoname\.github\.io)\//;
+
+async function installCdnCache(routeTarget) {
+    let usable = true;
+    try { fs.mkdirSync(CDN_CACHE_DIR, { recursive: true }); } catch { usable = false; }
+    await routeTarget.route(CDN_ROUTE_RE, async route => {
+        const url = route.request().url();
+        const file = path.join(CDN_CACHE_DIR, crypto.createHash('sha256').update(url).digest('hex') + '.json');
+        let stale = null;
+        if (usable) {
+            try {
+                stale = JSON.parse(await fs.promises.readFile(file, 'utf8'));
+            } catch { stale = null; }
+            if (stale && Date.now() - (stale.fetchedAt || 0) < CDN_CACHE_TTL_MS) {
+                return route.fulfill({
+                    status: stale.status,
+                    contentType: stale.contentType,
+                    body: Buffer.from(stale.body, 'base64')
+                });
+            }
+        }
+        try {
+            const response = await route.fetch();
+            const body = await response.body();
+            if (usable && response.status() >= 200 && response.status() < 300) {
+                const entry = {
+                    fetchedAt: Date.now(),
+                    status: response.status(),
+                    contentType: response.headers()['content-type'] || 'application/octet-stream',
+                    body: body.toString('base64')
+                };
+                try { await fs.promises.writeFile(file, JSON.stringify(entry)); } catch { /* ignore */ }
+            }
+            return route.fulfill({ response, body });
+        } catch (e) {
+            if (stale) {
+                return route.fulfill({
+                    status: stale.status,
+                    contentType: stale.contentType,
+                    body: Buffer.from(stale.body, 'base64')
+                });
+            }
+            // Nothing cached and the network failed — same end result as an
+            // unmocked failed request.
+            return route.abort('failed');
+        }
+    });
+}
+
 /* ================= Playwright backend ================= */
 
 function loadPlaywright() {
@@ -248,13 +314,16 @@ class PlaywrightPage {
         const pw = loadPlaywright();
         if (!pw) throw new Error('playwright package not found (local, global, or npm root -g). See tools/README.md.');
         const browser = await launchBrowser(pw);
-        const page = new PlaywrightPage(browser, ctx, viewport);
-        page._page = await browser.newPage({ viewport });
+        const context = await browser.newContext({ viewport });
+        await installCdnCache(context);
+        const page = new PlaywrightPage(browser, context, ctx);
+        page._page = await context.newPage();
         return page;
     }
 
-    constructor(browser, ctx) {
+    constructor(browser, context, ctx) {
         this.browser = browser;
+        this.context = context;
         this.ctx = ctx;
         this._page = null;
         this._consoleBound = false;
@@ -266,7 +335,7 @@ class PlaywrightPage {
             this._page.on('console', m => { if (m.type() === 'error') this.ctx.consoleErrors.push(m.text()); });
             this._page.on('pageerror', e => this.ctx.pageErrors.push(String(e)));
         }
-        await this._page.goto(url, { waitUntil: 'networkidle' });
+        await this._page.goto(url, { waitUntil: 'load' });
     }
 
     async evaluate(js) {
@@ -347,7 +416,12 @@ function startStaticServer() {
             if (urlPath.endsWith('/')) filePath = path.join(filePath, 'index.html');
             fs.readFile(filePath, (err, data) => {
                 if (err) { res.writeHead(404); res.end('not found'); return; }
-                res.writeHead(200, { 'Content-Type': MIME[path.extname(filePath).toLowerCase()] || 'application/octet-stream' });
+                res.writeHead(200, {
+                    'Content-Type': MIME[path.extname(filePath).toLowerCase()] || 'application/octet-stream',
+                    // Let chromium cache local assets within a context so the
+                    // reload-heavy scenarios don't re-download/re-parse them.
+                    'Cache-Control': 'public, max-age=60'
+                });
                 res.end(data);
             });
         });
@@ -469,4 +543,4 @@ async function openSettings(page) {
     await sleep(400); // let the open transition finish
 }
 
-module.exports = { REPO_ROOT, run, waitForBoot, openSettings, sleep, startStaticServer, loadPlaywright, launchBrowser };
+module.exports = { REPO_ROOT, run, waitForBoot, openSettings, sleep, startStaticServer, loadPlaywright, launchBrowser, installCdnCache };

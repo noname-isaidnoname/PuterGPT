@@ -9,6 +9,7 @@ import { deepDiff } from './utils.js';
 import { renderThemeCards, syncThemeCards } from './theme-ui.js';
 import './search-ui.js'; // Initializes search UI globally
 import './theme-generator.js'; // Initialize theme generator
+import './theme-editor.js'; // Initialize theme editor (custom theme editing + presets)
 import './code-runner.js'; // Initializes code runner modal (HTML/JS preview) globally
 import './backup.js';
 import { initializeGenerationParams } from './generation-params.js';
