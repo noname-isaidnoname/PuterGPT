@@ -13,7 +13,7 @@ subscribe((newState, prevState) => {
 });
 
 // Wire up toast listener
-on('toast:show', (msg, type) => showToast(msg, type));
+on('toast:show', (msg, type, action) => showToast(msg, type, action));
 
 // Wire up scroll-to-bottom listener
 on('ui:scroll-bottom', () => scrollToBottom());
@@ -57,7 +57,7 @@ function removeToastImmediate(toastObj) {
     if (idx !== -1) toastPool.splice(idx, 1);
 }
 
-export function showToast(msg, type = 'info') {
+export function showToast(msg, type = 'info', action = null) {
     // Normalize type: 'warn' -> 'warning'
     const normalizedType = type === 'warn' ? 'warning' : type;
     
@@ -72,6 +72,13 @@ export function showToast(msg, type = 'info') {
     toastEl.className = 'toast';
     toastEl.classList.add(normalizedType);
     toastEl.textContent = msg;
+    if (action) {
+        const button = document.createElement('button');
+        button.className = 'btn';
+        button.textContent = action.label;
+        button.addEventListener('click', action.onClick);
+        toastEl.appendChild(button);
+    }
     // Start off-screen below
     toastEl.style.bottom = `${TOAST_HIDDEN_BOTTOM}px`;
     els.toastContainer.appendChild(toastEl);
@@ -91,7 +98,7 @@ export function showToast(msg, type = 'info') {
     // Schedule fade-out
     toastObj.fadeOutTimer = setTimeout(() => {
         removeToast(toastObj);
-    }, TOAST_VISIBLE_DURATION);
+    }, action ? 15000 : TOAST_VISIBLE_DURATION);
 }
 
 export function scrollToBottom() {
@@ -205,6 +212,11 @@ window.handleDeleteChat = () => {
 
 window.handleExportChat = () => {
     emit('chat:export-json', activeContextChatId);
+    hideContextMenu();
+};
+
+window.handleExportMarkdown = () => {
+    emit('chat:export-markdown', activeContextChatId);
     hideContextMenu();
 };
 

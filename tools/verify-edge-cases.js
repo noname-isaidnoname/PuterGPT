@@ -146,6 +146,63 @@ async function main() {
     return true;
   }, sel);
 
+  scenario('Backup restores conflicts and excludes tokens by default', async () => {
+    const page = await newPage();
+    try {
+      const result = await page.evaluate(async () => {
+        const { db } = await import('./js/indexeddb-storage.js');
+        const { createBackup, restoreBackup } = await import('./js/backup.js');
+        await db.chats.put({ id: 'same', title: 'Original', messages: [], lastModified: 1 });
+        await db.tokens.put({ id: 'secret', name: 'Secret', value: 'token-secret' });
+        const normal = JSON.parse(await createBackup());
+        const withTokens = JSON.parse(await createBackup(true));
+        const incoming = { version: 1, exportedAt: '', chats: [{ id: 'same', title: 'Imported', messages: [], lastModified: 2 }],
+          themes: [], settings: {} };
+        await restoreBackup(incoming, 'skip');
+        const skipped = (await db.chats.get('same')).title;
+        await restoreBackup(incoming, 'rename');
+        const chats = await db.chats.toArray();
+        await restoreBackup(incoming, 'overwrite');
+        const overwritten = (await db.chats.get('same')).title;
+        let invalidRejected = false;
+        try { await restoreBackup({ ...incoming, themes: [{ id: 'dark', value: {} }] }, 'overwrite'); }
+        catch { invalidRejected = true; }
+        return { normal, withTokens, skipped, chats, overwritten, invalidRejected };
+      });
+      check(!('tokens' in result.normal) && !JSON.stringify(result.normal).includes('token-secret'), 'Default backup omits tokens');
+      check(result.withTokens.tokens[0].value === 'token-secret', 'Token opt-in includes credentials');
+      check(result.skipped === 'Original' && result.overwritten === 'Imported', 'Skip and overwrite honor chat collisions');
+      check(result.chats.length === 2 && result.chats.some(chat => chat.title === 'Imported (imported)'), 'Rename retains both chats');
+      check(result.invalidRejected, 'Invalid theme IDs rejected');
+    } finally {
+      await page.close();
+    }
+  });
+
+  scenario('Markdown export preserves content and print hides app chrome', async () => {
+    const page = await newPage();
+    try {
+      const markdown = await page.evaluate(async () => {
+        const { chatToMarkdown } = await import('./js/export.js');
+        return chatToMarkdown({
+          id: 'example', title: 'Example', systemPrompt: 'Be helpful',
+          messages: [
+            { role: 'user', content: [{ type: 'text', text: 'Question' }, { type: 'image_url', image_url: 'data:image/png;base64,abc' }] },
+            { role: 'assistant', content: '```js\nconst x = 1;\n```', reasoning: 'thinking' }
+          ]
+        });
+      });
+      check(markdown.includes('# Example') && markdown.includes('## user') && markdown.includes('Question'), 'Markdown includes title and user message');
+      check(markdown.includes('```js\nconst x = 1;\n```') && markdown.includes('thinking'), 'Markdown preserves code and reasoning');
+      check(markdown.includes('data:image/png;base64,abc') && markdown.includes('Be helpful'), 'Markdown preserves attachments and system prompt');
+      await page.emulateMedia({ media: 'print' });
+      check(await page.locator('#sidebar').evaluate(el => getComputedStyle(el).display === 'none'), 'Print hides sidebar');
+      check(await page.locator('#chat-container').evaluate(el => getComputedStyle(el).overflowY === 'visible'), 'Print expands transcript');
+    } finally {
+      await page.close();
+    }
+  });
+
   scenario('Test 1: user bubble sizes to content (reported bug)', async () => {
     const page = await newPage(() => {});
     await seedToken(page);

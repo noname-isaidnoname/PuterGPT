@@ -127,6 +127,7 @@
     <link rel="stylesheet" href="css/animations.css">
     <link rel="stylesheet" href="css/token-management.css">
     <link rel="stylesheet" href="css/search.css">
+    <link rel="stylesheet" href="css/print.css" media="print">
 </head>
 <body>
 
@@ -297,9 +298,26 @@
                     <button class="settings-tab" role="tab" aria-selected="false" data-tab="appearance" onclick="switchSettingsTab('appearance')">
                         <span class="material-icons-outlined">palette</span> Appearance
                     </button>
+                    <button class="settings-tab" role="tab" aria-selected="false" data-tab="data" onclick="switchSettingsTab('data')">
+                        <span class="material-icons-outlined">save</span> Data
+                    </button>
                 </aside>
 
                 <div class="settings-content">
+
+                    <section class="settings-panel" id="settings-panel-data" role="tabpanel">
+                        <div class="settings-panel-header">
+                            <h4>Backup and restore</h4>
+                            <p>Backups contain chats, prompts, settings and custom themes. Keep them private.</p>
+                        </div>
+                        <label><input type="checkbox" id="backup-include-tokens"> Include API tokens (secret credentials)</label>
+                        <div style="margin: 16px 0; display:flex; gap:10px; flex-wrap:wrap">
+                            <button class="btn primary" onclick="exportFullBackup()">Export backup</button>
+                            <button class="btn" onclick="document.getElementById('backup-input').click()">Restore backup</button>
+                        </div>
+                        <input type="file" id="backup-input" accept=".json,application/json" hidden>
+                        <p>Restore merges data. Custom themes can contain JavaScript: only restore backups you trust. The page reloads after restore.</p>
+                    </section>
 
                     <!-- General Panel -->
                     <section class="settings-panel active" id="settings-panel-general" role="tabpanel">
@@ -495,6 +513,10 @@
         <div class="context-item" onclick="handleExportChat()">
             <span class="material-icons-outlined" style="font-size:18px">download</span>
             Export as JSON
+        </div>
+        <div class="context-item" onclick="handleExportMarkdown()">
+            <span class="material-icons-outlined" style="font-size:18px">description</span>
+            Export as Markdown (includes prompts)
         </div>
         <div class="context-item" onclick="handleShareChat()">
             <span class="material-icons-outlined" style="font-size:18px">share</span>

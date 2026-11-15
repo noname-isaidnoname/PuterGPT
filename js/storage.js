@@ -1,7 +1,7 @@
 import { state, els } from './state.js';
 import { getMessageText } from './utils.js';
 import { emit, on } from './event-bus.js';
-import { db } from './indexeddb-storage.js';
+import { db, reportStorageError } from './indexeddb-storage.js';
 import { setState, subscribe } from './store.js';
 import { abortAssistantResponse } from './chat-api.js';
 
@@ -155,9 +155,21 @@ on('chat:new-requested', () => {
 });
 
 on('chat:save', async () => {
-    await saveChatToStorage();
+    try {
+        await saveChatToStorage();
+    } catch (error) {
+        if (!reportStorageError(error)) {
+            console.error('Failed to save chat:', error);
+            emit('toast:show', 'Failed to save chat', 'error');
+        }
+    }
 });
 
 on('chat:rename', (id, newTitle) => {
-    renameChat(id, newTitle);
+    renameChat(id, newTitle).catch(error => {
+        if (!reportStorageError(error)) {
+            console.error('Failed to rename chat:', error);
+            emit('toast:show', 'Failed to rename chat', 'error');
+        }
+    });
 });

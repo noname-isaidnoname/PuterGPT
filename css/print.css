@@ -1,0 +1,53 @@
+/* Print the transcript rather than the surrounding application chrome. */
+body {
+    height: auto !important;
+    overflow: visible !important;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+}
+
+body > :not(#main),
+#main > :not(#chat-container),
+.msg-footer,
+.code-block-actions,
+.typing-indicator {
+    display: none !important;
+}
+
+#main, #chat-container {
+    display: block !important;
+    height: auto !important;
+    overflow: visible !important;
+    padding: 0 !important;
+}
+
+.message, .message-wrapper {
+    display: block;
+    width: 100%;
+    max-width: none;
+    padding: 0;
+}
+
+.message {
+    margin: 0 0 1em;
+    break-inside: avoid;
+}
+
+.message.user::before {
+    content: "User";
+    font-weight: bold;
+}
+
+.message.assistant::before {
+    content: "Assistant";
+    font-weight: bold;
+}
+
+.user-bubble {
+    max-width: none;
+}
+
+pre {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}

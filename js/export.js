@@ -8,9 +8,62 @@ import { abortAssistantResponse } from './chat-api.js';
 
 // Wire up listeners for the context-menu actions emitted from ui.js
 on('chat:export-json', (chatId) => exportChatAsJson(chatId));
+on('chat:export-markdown', (chatId) => exportChatAsMarkdown(chatId));
 on('chat:share', (chatId) => shareChat(chatId));
 
 // Export utilities for conversations
+
+// Use a fence longer than any run in the value so metadata cannot terminate it.
+function jsonBlock(value) {
+    const json = JSON.stringify(value, null, 2);
+    const longest = Math.max(0, ...(json.match(/`+/g) || []).map(run => run.length));
+    const fence = '`'.repeat(Math.max(3, longest + 1));
+    return `${fence}json\n${json}\n${fence}`;
+}
+
+export function chatToMarkdown(chat) {
+    const sections = [`# ${chat.title || 'Untitled Chat'}`];
+    const { title, messages, ...metadata } = chat;
+    if (Object.keys(metadata).length) sections.push(`## Chat metadata\n\n${jsonBlock(metadata)}`);
+    for (const message of messages) {
+        const { role, content, ...extra } = message;
+        const heading = typeof role === 'string' && role ? role : 'Message';
+        let text;
+        if (typeof content === 'string') {
+            text = content;
+        } else if (Array.isArray(content)) {
+            // Keep non-text parts, including attached images, rather than dropping them.
+            text = content.map(part => part && part.type === 'text' && typeof part.text === 'string'
+                && Object.keys(part).every(key => key === 'type' || key === 'text')
+                ? part.text : jsonBlock(part)).join('\n\n');
+        } else {
+            text = jsonBlock(content ?? null);
+        }
+        sections.push(`## ${heading}\n\n${text}${Object.keys(extra).length ? `\n\n${jsonBlock(extra)}` : ''}`);
+    }
+    return sections.join('\n\n') + '\n';
+}
+
+async function exportChatAsMarkdown(chatId) {
+    try {
+        const chat = await db.chats.get(chatId);
+        if (!chat) {
+            emit('toast:show', 'Chat not found', 'error');
+            return;
+        }
+        if (!Array.isArray(chat.messages)) throw new Error('Invalid chat messages');
+        const blob = new Blob([chatToMarkdown(chat)], { type: 'text/markdown;charset=utf-8' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `${(chat.title || 'chat').replace(/[^a-z0-9]/gi, '_').toLowerCase()}_${chat.id}.md`;
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(link.href), 5000);
+        emit('toast:show', 'Chat exported successfully', 'success');
+    } catch (error) {
+        console.error('Failed to export chat:', error);
+        emit('toast:show', 'Failed to export chat', 'error');
+    }
+}
 
 async function exportChatAsJson(chatId) {
     try {

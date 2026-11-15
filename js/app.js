@@ -10,6 +10,7 @@ import { renderThemeCards, syncThemeCards } from './theme-ui.js';
 import './search-ui.js'; // Initializes search UI globally
 import './theme-generator.js'; // Initialize theme generator
 import './code-runner.js'; // Initializes code runner modal (HTML/JS preview) globally
+import './backup.js';
 import { loadCustomThemes } from './theme-generator.js';
 import { emit } from './event-bus.js';
 

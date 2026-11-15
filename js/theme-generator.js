@@ -326,11 +326,14 @@ window.generateCustomTheme = async () => {
         if (generateBtn) setGenerateButtonBusy(generateBtn);
         const cssContents = await loadCssContentsForContext();
         const theme = await requestThemeFromModel({ prompt, selectedModel, generateJS, cssContents });
-        const themeId = persistCustomTheme(theme);
-        applyNewTheme(themeId, theme.name);
+        const themeId = await persistCustomTheme(theme);
+        await applyNewTheme(themeId, theme.name);
     } catch (error) {
-        console.error('Theme generation failed:', error);
-        emit('toast:show', `Failed to generate theme: ${error.message}`, 'error');
+        const { reportStorageError } = await import('./indexeddb-storage.js');
+        if (!reportStorageError(error)) {
+            console.error('Theme generation failed:', error);
+            emit('toast:show', `Failed to generate theme: ${error.message}`, 'error');
+        }
     } finally {
         if (generateBtn) restoreGenerateButton(generateBtn, originalText);
     }
@@ -610,14 +613,29 @@ function generateCustomThemeId() {
     return `custom-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
 }
 
-function persistCustomTheme(theme) {
+async function persistCustomTheme(theme) {
     const themeId = generateCustomThemeId();
 
     // Re-read localStorage to get the latest state (a theme may have been
     // deleted since page load).
-    const currentCustomThemes = JSON.parse(localStorage.getItem('customThemes') || '{}');
+    const previous = localStorage.getItem('customThemes');
+    const currentCustomThemes = JSON.parse(previous || '{}');
     currentCustomThemes[themeId] = theme;
-    localStorage.setItem('customThemes', JSON.stringify(currentCustomThemes));
+    const { db } = await import('./indexeddb-storage.js');
+    let localChanged = false;
+    try {
+        await db.transaction('rw', db.settings, async () => {
+            await db.settings.put({ key: 'customThemes', value: currentCustomThemes });
+            localStorage.setItem('customThemes', JSON.stringify(currentCustomThemes));
+            localChanged = true;
+        });
+    } catch (error) {
+        if (localChanged) {
+            if (previous === null) localStorage.removeItem('customThemes');
+            else localStorage.setItem('customThemes', previous);
+        }
+        throw error;
+    }
     customThemes = currentCustomThemes;
 
     return themeId;
@@ -625,7 +643,6 @@ function persistCustomTheme(theme) {
 
 async function applyNewTheme(themeId, themeName) {
     const { db } = await import('./indexeddb-storage.js');
-    await db.settings.put({ key: 'customThemes', value: customThemes });
     themeDefinitions[themeId] = customThemes[themeId];
 
     // Switch to the new theme (triggers applyTheme + card sync via subscription)

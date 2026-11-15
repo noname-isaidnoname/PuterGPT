@@ -19,6 +19,8 @@ Plain ES modules loaded with `<script type="module" src="js/app.js">`. Globals r
 | `js/state.js` | `applyTheme()` (sets inline vars on `<html>`, `data-theme`, swaps the highlight.js `<link id="hljs-theme">` between `github.min.css`/`github-dark.min.css`, sets `meta theme-color`), loads settings from IndexedDB (`loadSettingsFromDB`), Proxy-backed `state` export |
 | `js/store.js` | tiny Zustand-like store (`setState`/`getState`/`subscribe`) + `themeDefinitions` (built-in `light`, `dark`, plus `custom-*` merged in at runtime). Holds the canonical light/dark variable sets |
 | `js/chat.js` | input handling, `sendMessage()`, image attach, `resizeInput()` |
+| `js/export.js`, `css/print.css` | per-chat JSON/Markdown export and share links; print-only transcript layout. Markdown exports include system prompts, message metadata and non-text parts, so treat them as sensitive |
+| `js/backup.js` | versioned full-data JSON backups and transactional restore; tokens are opt-in, collisions use an explicit policy, and custom themes are mirrored to localStorage because theme bootstrap reads it first |
 | `js/chat-api.js` | streaming responses from the Puter.ai API (`api.puter.com`), token rotation hooks, `triggerAssistantResponse()`, abort |
 | `js/chat-ui.js` | `renderMessage()` (the message DOM), `decorateCodeBlocks()` (adds the `.code-block-header` banner with language label + copy/Run buttons), `reRenderAllMessages()` |
 | `js/chat-edit.js` | edit mode: `window.enterEditMode(index)`, save / save+regenerate / cancel |

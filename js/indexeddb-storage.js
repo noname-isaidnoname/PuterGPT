@@ -1,5 +1,16 @@
 
+import { emit } from './event-bus.js';
+
 const db = new Dexie('PuterGPT');
+
+export function reportStorageError(error) {
+    if (error?.name !== 'QuotaExceededError' && error?.inner?.name !== 'QuotaExceededError') return false;
+    emit('toast:show', 'Storage is full. Recent changes may not have been saved.', 'error', {
+        label: 'Export backup',
+        onClick: () => window.exportFullBackup()
+    });
+    return true;
+}
 
 db.version(1).stores({
     chats: 'id, title, lastModified',
