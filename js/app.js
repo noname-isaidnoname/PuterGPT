@@ -11,6 +11,10 @@ import './search-ui.js'; // Initializes search UI globally
 import './theme-generator.js'; // Initialize theme generator
 import './code-runner.js'; // Initializes code runner modal (HTML/JS preview) globally
 import './backup.js';
+import { initializeGenerationParams } from './generation-params.js';
+import { initializeVoiceInput } from './voice-input.js';
+import './variants.js';
+import './compare.js';
 import { loadCustomThemes } from './theme-generator.js';
 import { emit } from './event-bus.js';
 
@@ -20,10 +24,28 @@ window.addEventListener('load', async () => {
 });
 
 async function bootstrap() {
+    initializeGenerationParams();
+    initializeVoiceInput();
     // Perform migration if needed
     await migrateFromLocalStorage();
     await bootstrapThemes();
     await import('./state.js').then(m => m.loadSettingsFromDB());
+    const variantToggle = document.getElementById('enable-variants');
+    variantToggle.checked = (await db.settings.get('enable_variants'))?.value === true;
+    setState({ variantsEnabled: variantToggle.checked });
+    variantToggle.addEventListener('change', async () => {
+        try {
+            await db.settings.put({ key: 'enable_variants', value: variantToggle.checked });
+            setState({ variantsEnabled: variantToggle.checked });
+            emit('messages:rerender');
+        } catch (error) {
+            variantToggle.checked = !variantToggle.checked;
+            emit('toast:show', 'Could not save response variants setting', 'error');
+        }
+    });
+    subscribe((next, previous) => {
+        if (next.isGenerating !== previous.isGenerating) variantToggle.disabled = next.isGenerating;
+    });
     const autoName = document.getElementById('auto-name-chats');
     autoName.checked = (await db.settings.get('auto_name_chats'))?.value !== false;
     autoName.addEventListener('change', async () => {

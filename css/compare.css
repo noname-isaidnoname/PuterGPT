@@ -1,0 +1,99 @@
+.compare-modal {
+    width: min(94vw, 1100px);
+    max-width: 1100px;
+    max-height: 90vh;
+}
+
+.compare-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.compare-description {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    line-height: 1.5;
+    margin: 0;
+}
+
+.compare-modal textarea {
+    width: 100%;
+    min-height: 72px;
+    box-sizing: border-box;
+}
+
+.compare-columns {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.compare-column {
+    min-width: 0;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-primary);
+    padding: 14px;
+}
+
+.compare-column select {
+    width: 100%;
+}
+
+.compare-column-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin: 10px 0;
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+}
+
+.compare-output {
+    min-height: 120px;
+    max-height: 35vh;
+    overflow: auto;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    line-height: 1.6;
+    color: var(--text-primary);
+}
+
+.compare-actions {
+    display: flex;
+    justify-content: flex-end;
+    position: sticky;
+    bottom: -24px;
+    background: var(--bg-secondary);
+    padding: 10px 0 4px;
+}
+
+.compare-modal button:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+@media (max-width: 600px) {
+    .compare-modal {
+        padding: 18px;
+    }
+    .compare-actions {
+        bottom: -18px;
+    }
+    .compare-columns {
+        grid-template-columns: 1fr;
+    }
+    .compare-output {
+        min-height: 80px;
+        max-height: 25vh;
+    }
+    .input-function-row .input-chip {
+        padding: 0 10px;
+    }
+    .input-function-row .input-chip-label {
+        display: none;
+    }
+}

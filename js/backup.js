@@ -81,6 +81,7 @@ export async function createBackup(includeTokens = false) {
             const current = { ...existing, id: state.currentChatId,
                 title: existing?.title || (text ? text.substring(0, 25) + (text.length > 25 ? '...' : '') : 'New Chat'),
                 lastModified: Date.now(), messages: state.messages,
+                generationParams: state.generationParams,
                 systemPrompt: existing?.systemPrompt ?? firstUser?.systemPrompt ?? state.config.systemPrompt };
             if (index < 0) chats.push(current);
             else chats[index] = current;

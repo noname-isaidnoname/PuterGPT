@@ -30,6 +30,11 @@ run('verify-mobile', { viewport: { width: 420, height: 850 } }, async (page, ctx
     await ctx.shot('mobile-general.png');
 
     // Tabs remain reachable via the horizontal scroll row
+    await page.click('.settings-tab[data-tab="model"]');
+    await page.waitFor("document.getElementById('settings-panel-model').classList.contains('active')");
+    await sleep(400);
+    await ctx.shot('mobile-model.png');
+
     await page.click('.settings-tab[data-tab="tokens"]');
     await page.waitFor("document.getElementById('settings-panel-tokens').classList.contains('active')");
     check(true, 'tokens tab reachable');

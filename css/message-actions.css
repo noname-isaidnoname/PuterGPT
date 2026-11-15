@@ -48,3 +48,16 @@
     font-size: 0.8rem;
     justify-content: center;
 }
+
+.variant-switcher {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+}
+
+.variant-switcher .action-btn:disabled {
+    opacity: 0.4;
+    cursor: default;
+}

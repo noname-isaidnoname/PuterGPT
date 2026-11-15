@@ -32,6 +32,13 @@ run('verify-settings', async (page, ctx) => {
         await ctx.shot(`settings-${tab}.png`);
     }
 
+    await page.click('.settings-tab[data-tab="data"]');
+    check(!(await page.evaluate("document.getElementById('backup-include-tokens').checked")), 'backup tokens default off');
+    await page.click('#backup-include-tokens');
+    check(await page.evaluate("document.getElementById('backup-include-tokens').checked"), 'backup token switch toggles on');
+    await page.click('#backup-include-tokens');
+    await page.click('.settings-tab[data-tab="general"]');
+
     // Auto-scroll switch flips on click
     const before = await page.evaluate("document.getElementById('auto-scroll').checked");
     await page.click('#auto-scroll');

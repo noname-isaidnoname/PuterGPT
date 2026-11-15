@@ -2,6 +2,7 @@ import { state, els } from './state.js';
 import { generateUniqueId, getMessageText, escapeHtml } from './utils.js';
 import { sanitizeHtml } from './sanitize.js';
 import { emit, on } from './event-bus.js';
+import { variantsOf } from './variants.js';
 
 // getMessageText is re-exported from utils for backward compatibility
 export { getMessageText };
@@ -161,6 +162,19 @@ export function renderMessage(index, message, isTyping = false) {
     const bodyHTML = (message.role === 'user')
         ? `<div class="user-bubble">${innerContent}</div>`
         : `${costHTML}${reasoningHTML}<div class="rendered-content">${innerContent}</div>`;
+    const variants = message.role === 'assistant' ? variantsOf(message) : [];
+    const activeVariant = Number.isInteger(message.activeVariant) && message.activeVariant >= 0
+        && message.activeVariant < variants.length ? message.activeVariant : 0;
+    const variantControls = state.variantsEnabled && message.role === 'assistant' && !isTyping
+        ? `${variants.length > 1 ? `
+            <span class="variant-switcher" aria-label="Response variant">
+                <button class="action-btn variant-prev" onclick="switchResponseVariant(${index}, -1)" title="Previous response" aria-label="Previous response" ${activeVariant === 0 ? 'disabled' : ''}><span class="material-icons-outlined">chevron_left</span></button>
+                <span aria-live="polite">${activeVariant + 1}/${variants.length}</span>
+                <button class="action-btn variant-next" onclick="switchResponseVariant(${index}, 1)" title="Next response" aria-label="Next response" ${activeVariant === variants.length - 1 ? 'disabled' : ''}><span class="material-icons-outlined">chevron_right</span></button>
+            </span>` : ''}
+            ${index === state.messages.length - 1 && state.messages[index - 1]?.role === 'user' ? `
+                <button class="action-btn regenerate" onclick="regenerateResponseVariant(${index})" title="Regenerate response" aria-label="Regenerate response"><span class="material-icons-outlined">refresh</span></button>` : ''}`
+        : '';
 
     msgDiv.innerHTML = `
         <div class="message-wrapper">
@@ -168,6 +182,7 @@ export function renderMessage(index, message, isTyping = false) {
                 ${bodyHTML}
             </div>
             <div class="msg-footer">
+                ${variantControls}
                 ${!isTyping && ((getMessageText(message) && getMessageText(message).trim().length > 0) || (message.reasoning && message.reasoning.trim().length > 0)) ? `
                     <button class="action-btn edit" onclick="enterEditMode(${index})" title="Edit Message">
                         <span class="material-icons-outlined">edit</span>

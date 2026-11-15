@@ -8,6 +8,8 @@ import { decorateCodeBlocks } from './chat-ui.js';
 import { getMessageText } from './utils.js';
 import { sanitizeHtml } from './sanitize.js';
 import { db } from './indexeddb-storage.js';
+import { normalizeGenerationParams } from './generation-params.js';
+import { addResponseVariant } from './variants.js';
 
 /**
  * Generation is tracked explicitly in the store as `state.isGenerating`
@@ -24,7 +26,15 @@ let activeStream = null;
  * path. Bounds-checked against `state.messages` because edits/regenerates
  * can truncate the array while a stream is in flight.
  */
-function finalizePartialResponse(aiMsgIndex, fullContent, fullReasoning) {
+function finalizePartialResponse(aiMsgIndex, fullContent, fullReasoning, originalMessage = null) {
+    if (originalMessage && aiMsgIndex !== undefined && state.messages[aiMsgIndex]) {
+        const response = { role: 'assistant', content: fullContent || '[Response not generated]', reasoning: fullReasoning };
+        state.messages[aiMsgIndex] = fullContent || fullReasoning
+            ? addResponseVariant(originalMessage, response) : originalMessage;
+        emit('messages:rerender');
+        if (fullContent || fullReasoning) emit('chat:save');
+        return;
+    }
     if (fullContent || fullReasoning) {
         const finalContent = fullContent || (fullReasoning ? '[Response not generated]' : '');
         const msg = state.messages[aiMsgIndex];
@@ -67,17 +77,20 @@ function settleGeneration() {
     setState({ isGenerating: false, lastOperationId: null, abortController: null });
 }
 
-export async function triggerAssistantResponse({ autoTitle = false } = {}) {
+export async function triggerAssistantResponse({ autoTitle = false, regenerateIndex = null } = {}) {
     if (state.isGenerating) {
         console.warn('Assistant response already in progress, ignoring duplicate request');
         return;
     }
 
+    if (regenerateIndex !== null && (!state.variantsEnabled || regenerateIndex !== state.messages.length - 1
+        || state.messages[regenerateIndex]?.role !== 'assistant' || state.messages[regenerateIndex - 1]?.role !== 'user')) return;
     // Mark synchronously so a re-entrant call in the same tick can't slip through.
     setState({ isGenerating: true });
 
     const ctx = createStreamContext();
     ctx.autoTitle = autoTitle;
+    ctx.originalMessage = regenerateIndex === null ? null : structuredClone(state.messages[regenerateIndex]);
     ctx.chatId = state.currentChatId;
     ctx.firstUserText = autoTitle ? getMessageText(state.messages[0]).slice(0, 2000) : '';
     // Register immediately so abortAssistantResponse() can finalize even if the
@@ -86,7 +99,7 @@ export async function triggerAssistantResponse({ autoTitle = false } = {}) {
 
     try {
         const currentModel = state.models.find(m => m.id === state.config.modelId);
-        const { messagesPayload, inputTokens, enableVision, enableWebSearch } = buildRequestPayload(currentModel);
+        const { messagesPayload, inputTokens, enableVision, enableWebSearch } = buildRequestPayload(currentModel, !!ctx.originalMessage);
 
         await prepareAssistantBubble(ctx);
         if (ctx.settled) return; // aborted while the bubble was being prepared
@@ -119,7 +132,7 @@ export async function triggerAssistantResponse({ autoTitle = false } = {}) {
     } finally {
         // Safety net: if nothing settled the generation state (e.g. an error
         // before the callbacks were wired up), release it here.
-        if (activeStream === ctx || state.isGenerating) {
+        if (activeStream === ctx) {
             settleGeneration();
         }
     }
@@ -139,8 +152,9 @@ function createStreamContext() {
     };
 }
 
-function buildRequestPayload(currentModel) {
-    const lastUserMessage = state.messages.filter(m => m.role === 'user').pop();
+function buildRequestPayload(currentModel, regenerating = false) {
+    const conversation = regenerating ? state.messages.slice(0, -1) : state.messages;
+    const lastUserMessage = conversation.filter(m => m.role === 'user').pop();
     const hasImagesForApi = lastUserMessage && lastUserMessage.images && lastUserMessage.images.length > 0;
     const modelSupportsVision = currentModel && currentModel.supportsVision;
     const modelSupportsSearch = currentModel && currentModel.supportsSearch;
@@ -149,7 +163,7 @@ function buildRequestPayload(currentModel) {
 
     const messagesPayload = [
         { role: 'system', content: state.config.systemPrompt },
-        ...state.messages
+        ...conversation.map(({ variants, activeVariant, ...message }) => message)
     ];
     const inputText = messagesPayload.map(m => getMessageText(m)).join(' ');
     const inputTokens = estimateTokens(inputText);
@@ -158,6 +172,7 @@ function buildRequestPayload(currentModel) {
 }
 
 function buildStreamRequestBody({ messagesPayload, enableVision, enableWebSearch }) {
+    const { temperature, maxTokens } = normalizeGenerationParams(state.generationParams);
     return {
         interface: 'puter-chat-completion',
         driver: 'ai-chat',
@@ -168,6 +183,8 @@ function buildStreamRequestBody({ messagesPayload, enableVision, enableWebSearch
             messages: messagesPayload,
             model: state.config.modelId,
             stream: true,
+            ...(temperature !== null && { temperature }),
+            ...(maxTokens !== null && { max_tokens: maxTokens }),
             ...(enableWebSearch && { tools: [{ type: 'web_search' }] })
         }
     };
@@ -183,9 +200,10 @@ function buildRequestHeaders(apiToken) {
 
 async function prepareAssistantBubble(ctx) {
     setState((s) => ({
-        messages: [...s.messages, { role: 'assistant', content: '' }]
+        messages: [...(ctx.originalMessage ? s.messages.slice(0, -1) : s.messages), { role: 'assistant', content: '' }]
     }));
     ctx.aiMsgIndex = state.messages.length - 1;
+    if (ctx.originalMessage) emit('messages:rerender');
     emit('message:append', ctx.aiMsgIndex, { role: 'assistant', content: '' }, true);
 
     // Wait for the DOM update to flush so we can query the element
@@ -273,6 +291,11 @@ function handleComplete(ctx, final, { inputTokens, currentModel, currentToken, o
 
         const outputTokens = estimateTokens(finalContent);
         msg.cost = calculateMessageCost(inputTokens, outputTokens, currentModel?.costInfo);
+        if (ctx.originalMessage) {
+            state.messages[ctx.aiMsgIndex] = finalContent || finalReasoning
+                ? addResponseVariant(ctx.originalMessage, msg)
+                : ctx.originalMessage;
+        }
     }
 
     emit('messages:rerender');
@@ -332,12 +355,12 @@ function handleStreamError(ctx, err, { currentToken, operationId }) {
     if (typing) typing.remove();
 
     if (err.name === 'AbortError') {
-        finalizePartialResponse(ctx.aiMsgIndex, ctx.fullContent, ctx.fullReasoning);
+        finalizePartialResponse(ctx.aiMsgIndex, ctx.fullContent, ctx.fullReasoning, ctx.originalMessage);
     } else {
         // Keep any partial answer the user already paid for; otherwise drop
         // the empty placeholder entirely and say what happened.
-        if (ctx.fullContent || ctx.fullReasoning) {
-            finalizePartialResponse(ctx.aiMsgIndex, ctx.fullContent, ctx.fullReasoning);
+        if (ctx.fullContent || ctx.fullReasoning || ctx.originalMessage) {
+            finalizePartialResponse(ctx.aiMsgIndex, ctx.fullContent, ctx.fullReasoning, ctx.originalMessage);
         } else {
             removeEmptyAssistantPlaceholder(ctx.aiMsgIndex);
             emit('messages:rerender');
@@ -359,10 +382,14 @@ function handleOuterStreamError(err, ctx) {
     if (ctx.settled) return;
     ctx.settled = true;
     if (err.name === 'AbortError') {
-        finalizePartialResponse(ctx.aiMsgIndex, ctx.fullContent, ctx.fullReasoning);
+        finalizePartialResponse(ctx.aiMsgIndex, ctx.fullContent, ctx.fullReasoning, ctx.originalMessage);
     } else {
-        removeEmptyAssistantPlaceholder(ctx.aiMsgIndex);
-        emit('messages:rerender');
+        if (ctx.originalMessage && ctx.aiMsgIndex !== undefined) {
+            finalizePartialResponse(ctx.aiMsgIndex, ctx.fullContent, ctx.fullReasoning, ctx.originalMessage);
+        } else {
+            removeEmptyAssistantPlaceholder(ctx.aiMsgIndex);
+            emit('messages:rerender');
+        }
         emit('toast:show', `Failed to generate response: ${err.message || err}`, 'error');
     }
     settleGeneration();
@@ -387,7 +414,7 @@ export function abortAssistantResponse() {
     // Settle synchronously: keep whatever partial answer we have (or drop the
     // empty placeholder), so the UI never depends on the abort error arriving.
     ctx.settled = true;
-    finalizePartialResponse(ctx.aiMsgIndex, ctx.fullContent, ctx.fullReasoning);
+    finalizePartialResponse(ctx.aiMsgIndex, ctx.fullContent, ctx.fullReasoning, ctx.originalMessage);
     settleGeneration();
 
     // Show feedback to user

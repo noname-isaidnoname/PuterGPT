@@ -4,6 +4,7 @@ import { setState, getState, subscribe, themeDefinitions } from './store.js';
 import { emit, on } from './event-bus.js';
 import { abortAssistantResponse } from './chat-api.js';
 import { createConfirmModal, createPromptModal } from './modal-helper.js';
+import { normalizeGenerationParams } from './generation-params.js';
 
 // Set up reactive subscription to update image preview when attached images change
 subscribe((newState, prevState) => {
@@ -243,6 +244,7 @@ window.newChat = () => {
     setState({
         messages: [],
         currentChatId: null,
+        generationParams: normalizeGenerationParams(null),
         attachedImages: []
     });
     els.chatContainer.innerHTML = '';

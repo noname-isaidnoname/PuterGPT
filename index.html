@@ -138,6 +138,7 @@
     <link rel="stylesheet" href="css/animations.css">
     <link rel="stylesheet" href="css/token-management.css">
     <link rel="stylesheet" href="css/search.css">
+    <link rel="stylesheet" href="css/compare.css">
     <link rel="stylesheet" href="css/print.css" media="print">
 </head>
 <body>
@@ -212,6 +213,8 @@
                 <input type="file" id="import-input" accept=".json" style="display: none;">
                 <div class="input-function-row">
                     <button id="image-btn" class="input-chip" onclick="document.getElementById('image-input').click()" title="Attach Images"><span class="material-icons-outlined">image</span><span class="input-chip-label">Image</span></button>
+                    <button id="voice-btn" class="input-chip" type="button" title="Start voice input" aria-label="Start voice input" aria-pressed="false" hidden><span class="material-icons-outlined">mic</span><span class="input-chip-label">Voice</span></button>
+                    <button id="compare-btn" class="input-chip" type="button" title="Compare models" aria-label="Compare models"><span class="material-icons-outlined">compare_arrows</span><span class="input-chip-label">Compare</span></button>
                     <button id="send-btn" onclick="handleSendButtonClick()" title="Send message"><span class="material-icons-outlined">arrow_upward</span></button>
                 </div>
             </div>
@@ -322,7 +325,16 @@
                             <h4>Backup and restore</h4>
                             <p>Backups contain chats, prompts, settings and custom themes. Keep them private.</p>
                         </div>
-                        <label><input type="checkbox" id="backup-include-tokens"> Include API tokens (secret credentials)</label>
+                        <div class="settings-toggle-row">
+                            <div class="settings-toggle-text">
+                                <span class="settings-toggle-label">Include API tokens</span>
+                                <span class="settings-toggle-desc">Tokens are secret credentials. Only include them in a backup you can keep secure.</span>
+                            </div>
+                            <label class="switch">
+                                <input type="checkbox" id="backup-include-tokens" aria-label="Include API tokens">
+                                <span class="switch-track"></span>
+                            </label>
+                        </div>
                         <div style="margin: 16px 0; display:flex; gap:10px; flex-wrap:wrap">
                             <button class="btn primary" onclick="exportFullBackup()">Export backup</button>
                             <button class="btn" onclick="document.getElementById('backup-input').click()">Restore backup</button>
@@ -363,6 +375,16 @@
                                 <span class="switch-track"></span>
                             </label>
                         </div>
+                        <div class="settings-toggle-row">
+                            <div class="settings-toggle-text">
+                                <span class="settings-toggle-label">Response variants <span class="settings-badge">Experimental</span></span>
+                                <span class="settings-toggle-desc">Keep alternative responses when regenerating. Saved immediately.</span>
+                            </div>
+                            <label class="switch">
+                                <input type="checkbox" id="enable-variants" aria-label="Enable response variants">
+                                <span class="switch-track"></span>
+                            </label>
+                        </div>
                     </section>
 
                     <!-- Model Panel -->
@@ -385,6 +407,22 @@
                             </div>
                             <select id="model-select"></select>
                             <div id="model-cost-display" class="model-cost-display" style="margin-top: 5px; font-size: 0.8rem; color: var(--text-secondary);"></div>
+                        </div>
+
+                        <div class="generation-settings">
+                            <h5>Generation parameters</h5>
+                            <p>Changes save immediately for this chat, or apply to the next new chat. Leave blank for model defaults. Some models ignore temperature or apply different limits.</p>
+                            <div class="generation-fields">
+                                <div class="select-group">
+                                    <label for="chat-temperature">Temperature (0–2)</label>
+                                    <input type="number" id="chat-temperature" min="0" max="2" step="any" placeholder="Model default">
+                                </div>
+                                <div class="select-group">
+                                    <label for="chat-max-tokens">Max output tokens</label>
+                                    <input type="number" id="chat-max-tokens" min="1" max="32768" step="1" placeholder="Model default">
+                                </div>
+                            </div>
+                            <button class="btn" type="button" id="reset-generation-params">Reset parameters</button>
                         </div>
 
                         <div class="settings-toggle-row">

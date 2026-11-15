@@ -5,6 +5,7 @@ import { setState } from './store.js';
 import { downloadJsonFile } from './modal-helper.js';
 import { emit, on } from './event-bus.js';
 import { abortAssistantResponse } from './chat-api.js';
+import { normalizeGenerationParams } from './generation-params.js';
 
 // Wire up listeners for the context-menu actions emitted from ui.js
 on('chat:export-json', (chatId) => exportChatAsJson(chatId));
@@ -86,6 +87,7 @@ async function exportChatAsJson(chatId) {
             // predate this field. Per-turn snapshots are kept on each user
             // message in `messages` below.
             systemPrompt: typeof chat.systemPrompt === 'string' ? chat.systemPrompt : '',
+            generationParams: normalizeGenerationParams(chat.generationParams),
             messages: chat.messages
         };
 
@@ -173,6 +175,7 @@ export function loadSharedChat() {
 
                 setState({
                     currentChatId: newChatId,
+                    generationParams: normalizeGenerationParams(null),
                     messages: sharedData.messages,
                     attachedImages: []
                 });
@@ -222,11 +225,13 @@ export function importChatFromJson(jsonData) {
             originalExportedAt: jsonData.exportedAt,
             // Preserve the original starting system prompt for reference.
             // It is NOT used as the active system prompt going forward.
-            systemPrompt: typeof jsonData.systemPrompt === 'string' ? jsonData.systemPrompt : ''
+            systemPrompt: typeof jsonData.systemPrompt === 'string' ? jsonData.systemPrompt : '',
+            generationParams: normalizeGenerationParams(jsonData.generationParams)
         };
 
         setState({
             currentChatId: newChatId,
+            generationParams: normalizeGenerationParams(jsonData.generationParams),
             messages: jsonData.messages,
             attachedImages: []
         });

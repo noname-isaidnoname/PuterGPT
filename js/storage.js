@@ -4,6 +4,7 @@ import { emit, on } from './event-bus.js';
 import { db, reportStorageError } from './indexeddb-storage.js';
 import { setState, subscribe } from './store.js';
 import { abortAssistantResponse } from './chat-api.js';
+import { normalizeGenerationParams } from './generation-params.js';
 
 // Set up reactive subscription to update chat list when current chat changes
 subscribe((newState, prevState) => {
@@ -39,6 +40,7 @@ async function saveChatToStorage() {
         id: state.currentChatId,
         title,
         messages: structuredClone(state.messages),
+        generationParams: normalizeGenerationParams(state.generationParams),
         lastModified: Date.now(),
         systemPrompt: initialSystemPrompt
     };
@@ -115,6 +117,7 @@ window.loadChat = async function(id) {
         abortAssistantResponse();
         setState({
             currentChatId: chat.id,
+            generationParams: normalizeGenerationParams(chat.generationParams),
             messages: chat.messages,
             attachedImages: []
         });
@@ -174,6 +177,7 @@ on('chat:new-requested', () => {
     setState({
         messages: [],
         currentChatId: null,
+        generationParams: normalizeGenerationParams(null),
         attachedImages: []
     });
     els.chatContainer.innerHTML = '';

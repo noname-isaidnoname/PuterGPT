@@ -103,11 +103,12 @@ async function main() {
   // Fresh page (fresh context) per scenario; route interception mocks the
   // Puter API. The models/details endpoint is mocked too so boots don't hit
   // the network. page.close() also closes the context.
-  const newPage = async (route) => {
+  const newPage = async (route, init) => {
     const ctx = await browser.newContext({
       viewport: { width: 1280, height: 800 },
       permissions: ['clipboard-read', 'clipboard-write'],
     });
+    if (init) await ctx.addInitScript(init);
     const page = await ctx.newPage();
     page.on('console', m => { if (m.type() === 'error') trackConsoleError(m.text()); });
     page.on('pageerror', e => { trackPageError(String(e)); });
@@ -145,6 +146,200 @@ async function main() {
     el.click();
     return true;
   }, sel);
+
+  scenario('Comparison streams independently without changing the chat', async () => {
+    const requests = [];
+    const page = await newPage(async route => {
+      const args = route.request().postDataJSON().args;
+      requests.push(args);
+      if (requests.length === 1) {
+        await route.fulfill({ status: 200, contentType: 'application/x-ndjson', body: NDJSON_ANSWER_A });
+      } else {
+        await new Promise(() => {});
+      }
+    });
+    try {
+      await seedToken(page);
+      await page.fill('#user-input', 'Compare this prompt');
+      await page.click('#compare-btn');
+      await page.click('.compare-start');
+      await page.waitForFunction(() => document.querySelectorAll('.compare-status')[0].textContent === 'Complete');
+      await page.waitForFunction(() => document.querySelectorAll('.compare-status')[1].textContent === 'Generating…');
+      check((await page.locator('.compare-output').first().innerText()) === 'Answer A', 'First model completes independently');
+      check(requests.length === 2 && requests.every(args => args.messages[1].content === 'Compare this prompt'), 'Both models receive the same prompt');
+      check(requests[0].model !== requests[1].model, 'Comparison uses two selected models');
+      await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'comparison-desktop.png') });
+      await page.setViewportSize({ width: 420, height: 850 });
+      await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'comparison-mobile.png') });
+      await page.locator('.compare-stop').nth(1).click();
+      check(await page.locator('.compare-status').nth(1).innerText() === 'Stopped', 'Second model stops independently');
+      check(await page.locator('.compare-status').first().innerText() === 'Complete', 'Stopping second model keeps first result');
+      await page.click('.compare-start');
+      await page.waitForFunction(() => [...document.querySelectorAll('.compare-status')].every(el => el.textContent === 'Generating…'));
+      await page.click('.compare-close');
+      check(await page.locator('.message').count() === 0 && await page.inputValue('#user-input') === 'Compare this prompt', 'Comparison leaves transcript and composer unchanged');
+      await page.click('#compare-btn');
+      check(await page.locator('.compare-status').first().innerText() === 'Ready' && await page.locator('.compare-output').first().innerText() === '', 'Closing active comparison resets its independent streams');
+    } finally {
+      await page.close();
+    }
+  });
+
+  scenario('Switching an earlier response requires confirmation', async () => {
+    const page = await newPage();
+    try {
+      await page.evaluate(async () => {
+        const { db } = await import('./js/indexeddb-storage.js');
+        const { setState } = await import('./js/store.js');
+        await db.chats.put({ id: 'branch', title: 'Branch', lastModified: Date.now(), messages: [
+          { role: 'user', content: 'Question' },
+          { role: 'assistant', content: 'Second', variants: [{ content: 'First' }, { content: 'Second' }], activeVariant: 1 },
+          { role: 'user', content: 'Follow-up' },
+          { role: 'assistant', content: 'Later answer' }
+        ] });
+        setState({ variantsEnabled: true });
+        await window.loadChat('branch');
+      });
+      await domClick(page, '.variant-prev');
+      await page.waitForSelector('.modal-overlay.active #confirm-btn');
+      check(await page.locator('.message').count() === 4, 'Later messages remain until confirmation');
+      await page.click('.modal-overlay.active #cancel-btn');
+      check(await page.locator('.message').count() === 4, 'Cancel preserves later messages');
+      await domClick(page, '.variant-prev');
+      await page.waitForSelector('.modal-overlay.active #confirm-btn');
+      await page.click('.modal-overlay.active #confirm-btn');
+      await page.waitForFunction(() => document.querySelectorAll('.message').length === 2);
+      check((await page.locator('.message.assistant').innerText()).includes('First'), 'Confirm selects alternative and removes dependent turns');
+    } finally {
+      await page.close();
+    }
+  });
+
+  scenario('Aborting variant regeneration preserves the original', async () => {
+    let calls = 0;
+    const page = await newPage(async route => {
+      calls++;
+      if (calls === 1) await route.fulfill({ status: 200, contentType: 'application/x-ndjson', body: NDJSON_ANSWER_A });
+      else await new Promise(() => {});
+    });
+    try {
+      await seedToken(page);
+      await page.evaluate(async () => (await import('./js/indexeddb-storage.js')).db.settings.put({ key: 'auto_name_chats', value: false }));
+      await page.click('button.settings-row');
+      await page.click('.settings-tab[data-tab="general"]');
+      await domClick(page, '#enable-variants');
+      await page.click('.settings-footer .btn.primary');
+      await page.fill('#user-input', 'Hello');
+      await page.press('#user-input', 'Enter');
+      await page.waitForSelector('.regenerate');
+      await domClick(page, '.regenerate');
+      await page.waitForSelector('.typing-indicator');
+      await page.click('#send-btn');
+      await page.waitForFunction(() => document.querySelector('.message.assistant .rendered-content')?.textContent.includes('Answer A'));
+      check(await page.locator('.variant-switcher').count() === 0, 'Abort restores the original without an empty variant');
+    } finally {
+      await page.close();
+    }
+  });
+
+  scenario('Response variants regenerate, switch and truncate on earlier edit', async () => {
+    let calls = 0;
+    const page = await newPage(async route => {
+      calls++;
+      const text = calls === 1 ? 'First answer' : calls === 2 ? 'Second answer' : 'Edited answer';
+      await route.fulfill({ status: 200, contentType: 'application/x-ndjson', body: JSON.stringify({ type: 'text', text }) + '\n' });
+    });
+    try {
+      await seedToken(page);
+      await page.evaluate(async () => (await import('./js/indexeddb-storage.js')).db.settings.put({ key: 'auto_name_chats', value: false }));
+      await page.click('button.settings-row');
+      await page.click('.settings-tab[data-tab="general"]');
+      await domClick(page, '#enable-variants');
+      await page.click('.settings-footer .btn.primary');
+      await page.fill('#user-input', 'Original question');
+      await page.press('#user-input', 'Enter');
+      await page.waitForFunction(() => document.querySelector('.message.assistant .rendered-content')?.textContent.includes('First answer'));
+      await page.waitForSelector('.regenerate');
+      await domClick(page, '.regenerate');
+      await page.waitForFunction(() => document.querySelector('.message.assistant .rendered-content')?.textContent.includes('Second answer'));
+      await page.waitForFunction(() => document.querySelector('.variant-switcher')?.textContent.includes('2/2'));
+      check(true, 'Regenerate preserves first response and selects second');
+      await page.locator('.message.assistant').hover();
+      await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'response-variants.png') });
+      await domClick(page, '.variant-prev');
+      await page.waitForFunction(() => document.querySelector('.message.assistant .rendered-content')?.textContent.includes('First answer'));
+      check((await page.locator('.variant-switcher').innerText()).includes('1/2'), 'Switch restores first response');
+      await domClick(page, '.variant-next');
+      await page.waitForFunction(() => document.querySelector('.message.assistant .rendered-content')?.textContent.includes('Second answer'));
+      await domClick(page, '.message.user .edit');
+      await page.fill('.message.user .edit-textarea', 'Edited question');
+      await domClick(page, '.message.user .edit-controls .btn.primary:last-child');
+      await page.waitForFunction(() => document.querySelector('.message.assistant .rendered-content')?.textContent.includes('Edited answer'));
+      check(await page.locator('.variant-switcher').count() === 0, 'Editing earlier prompt and regenerating discards its old response branch');
+      check(calls === 3, 'Exactly three completions were requested');
+    } finally {
+      await page.close();
+    }
+  });
+
+  scenario('Voice input uses speech recognition when available', async () => {
+    const page = await newPage(null, () => {
+      window.SpeechRecognition = class {
+        constructor() { window.testRecognition = this; }
+        start() {}
+        stop() { this.onend(); }
+      };
+    });
+    try {
+      await page.fill('#user-input', 'Hello ');
+      await page.click('#voice-btn');
+      await page.evaluate(() => {
+        window.testRecognition.onresult({ results: [[{ transcript: 'world' }]] });
+      });
+      check(await page.inputValue('#user-input') === 'Hello world', 'Speech transcript appears in composer');
+      check(await page.getAttribute('#voice-btn', 'aria-pressed') === 'true', 'Voice button indicates listening');
+      await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'voice-input.png') });
+      await page.click('#voice-btn');
+      check(await page.getAttribute('#voice-btn', 'aria-pressed') === 'false', 'Voice input stops');
+    } finally {
+      await page.close();
+    }
+  });
+
+  scenario('Generation parameters follow the chat and request', async () => {
+    let requestArgs;
+    const page = await newPage(async route => {
+      requestArgs = route.request().postDataJSON().args;
+      await route.fulfill({ status: 200, contentType: 'application/x-ndjson', body: NDJSON_OK });
+    });
+    try {
+      await seedToken(page);
+      await page.evaluate(async () => (await import('./js/indexeddb-storage.js')).db.settings.put({ key: 'auto_name_chats', value: false }));
+      await page.click('button.settings-row');
+      await page.click('.settings-tab[data-tab="model"]');
+      await page.fill('#chat-temperature', '0.4');
+      await page.locator('#chat-temperature').dispatchEvent('change');
+      await page.fill('#chat-max-tokens', '256');
+      await page.locator('#chat-max-tokens').dispatchEvent('change');
+      await page.click('.settings-footer .btn.primary');
+      await page.fill('#user-input', 'Parameter test');
+      await page.press('#user-input', 'Enter');
+      await page.waitForSelector('.message-cost');
+      check(requestArgs.temperature === 0.4 && requestArgs.max_tokens === 256, 'Request includes configured Puter parameters');
+      await page.waitForFunction(() => document.querySelectorAll('.chat-item').length === 1);
+      const chatId = await page.locator('.chat-item').first().getAttribute('data-id');
+      await page.evaluate(() => window.newChat());
+      check(await page.inputValue('#chat-temperature') === '' && await page.inputValue('#chat-max-tokens') === '', 'New chat uses model defaults');
+      await page.evaluate(id => window.loadChat(id), chatId);
+      check(await page.inputValue('#chat-temperature') === '0.4' && await page.inputValue('#chat-max-tokens') === '256', 'Loading chat restores its parameters');
+      await page.click('button.settings-row');
+      await page.click('.settings-tab[data-tab="model"]');
+      await page.click('#reset-generation-params');
+      check(await page.inputValue('#chat-temperature') === '' && await page.inputValue('#chat-max-tokens') === '', 'Reset clears both parameters');
+    } finally {
+      await page.close();
+    }
+  });
 
   scenario('Sidebar pin and filtering preserve chat metadata', async () => {
     const page = await newPage();

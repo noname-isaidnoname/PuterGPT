@@ -380,3 +380,33 @@
         align-items: flex-start;
     }
 }
+.generation-settings {
+    margin: 18px 0;
+    padding: 16px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-secondary);
+}
+
+.generation-settings h5 {
+    margin: 0 0 6px;
+    font-size: 0.9rem;
+}
+
+.generation-settings p {
+    margin: 0 0 14px;
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    line-height: 1.5;
+}
+
+.generation-fields {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+}
+
+.generation-fields input {
+    width: 100%;
+    box-sizing: border-box;
+}

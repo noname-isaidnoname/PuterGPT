@@ -2,8 +2,13 @@ import { state } from './state.js';
 import { getMessageText } from './utils.js';
 import { setState } from './store.js';
 import { emit } from './event-bus.js';
+import { editActiveVariant } from './variants.js';
 
 window.enterEditMode = function(index) {
+    if (state.isGenerating) {
+        emit('toast:show', 'Stop generation before editing a message.', 'warning');
+        return;
+    }
     const message = state.messages[index];
     const msgEl = document.querySelector(`.message[data-index='${index}']`);
     if (!msgEl) return;
@@ -63,7 +68,9 @@ function readEditTextarea(index) {
 function commitMessageEdit(index, newContent, { truncate = false } = {}) {
     setState((state) => {
         const newMessages = [...state.messages];
-        const updatedMessage = { ...newMessages[index], content: newContent };
+        const updatedMessage = newMessages[index].role === 'assistant'
+            ? editActiveVariant(newMessages[index], newContent)
+            : { ...newMessages[index], content: newContent };
         // When regenerating from a user message, refresh the system prompt
         // snapshot so the export reflects the prompt that will be (or just
         // was) used for the new assistant response. Assistant message edits
