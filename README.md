@@ -47,6 +47,10 @@ flowchart LR
 
 This is a schematic, not a screenshot. For current desktop and mobile screenshots, see [Development and visual checks](#development-and-visual-checks).
 
+| Settings and theme cards | Mobile settings |
+| --- | --- |
+| ![Desktop settings with theme cards](screenshots/settings-appearance.png) | ![Mobile settings with chat behavior switches](screenshots/mobile-settings.png) |
+
 ## Features
 
 - **Models and streaming:** Choose a Puter model, watch responses stream, stop generation, and see estimated costs. Supported models can use images and web search.
@@ -85,7 +89,7 @@ node tools/verify-all.js
 node tools/verify-all.js --changed
 ```
 
-For screenshots of the current settings sidebar and theme cards, run `node tools/verify-settings.js --backend playwright`. The harness writes `settings-general.png` and `settings-appearance.png` to the screenshot directory shown in its output (by default `$TMPDIR/putergpt-tools`); `node tools/verify-mobile.js --backend playwright` captures mobile views. Screenshots are verification artifacts, not checked into the repository.
+For screenshots of the current settings sidebar and theme cards, run `node tools/verify-settings.js --backend playwright`. The harness writes `settings-general.png` and `settings-appearance.png` to the screenshot directory shown in its output (by default `$TMPDIR/putergpt-tools`); `node tools/verify-mobile.js --backend playwright` captures mobile views. Harness screenshots are verification artifacts; they don't belong in commits by default. The exception is `screenshots/`: screenshots stored there and referenced by the documentation are part of the repository and may be committed. To refresh them, copy the harness output there (e.g. with `--screenshot-dir screenshots`) and keep the docs' references in sync.
 
 ## Project
 
