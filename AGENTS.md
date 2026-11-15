@@ -1,5 +1,7 @@
 # AGENTS.md
 
+Hosted at GitHub Pages: `https://noname-isaidnoname.github.io/PuterGPT/`, deliberately no build steps or servers: see below.
+
 PuterGPT — a browser-based AI chat client for [Puter.ai](https://puter.ai) models. Static HTML/CSS/vanilla JS. **No build step, no server, no package.json.** The deployed site is served as-is from this directory (GitHub Pages), and the same files run fine off `python3 -m http.server`.
 
 Everything lives in one big `index.html`; there is no bundler, no TypeScript, no lint/test harness. Keep it that way unless the user asks for tooling.
