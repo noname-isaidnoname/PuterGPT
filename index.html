@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#151518">
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" href="icons/icon-192.png" type="image/png">
     <title>PuterGPT</title>
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js" integrity="sha384-/TQbtLCAerC3jgaim+N78RZSDYV7ryeoBCVqTuzRrFec2akfBkHS7ACQ3PQhvMVi" crossorigin="anonymous"></script>
@@ -181,6 +183,10 @@
             <button class="settings-row" onclick="openSettings()">
                 <span class="settings-row-icon material-icons-outlined">settings</span>
                 <span class="settings-row-label">Settings &amp; AI Config</span>
+            </button>
+            <button class="settings-row" id="shortcuts-help" type="button" title="Keyboard shortcuts (?)">
+                <span class="settings-row-icon material-icons-outlined">keyboard</span>
+                <span class="settings-row-label">Keyboard shortcuts</span>
             </button>
         </div>
     </aside>

@@ -74,6 +74,7 @@ export function showToast(msg, type = 'info', action = null) {
     toastEl.classList.add(normalizedType);
     toastEl.textContent = msg;
     if (action) {
+        toastEl.classList.add('toast-actionable');
         const button = document.createElement('button');
         button.className = 'btn';
         button.textContent = action.label;

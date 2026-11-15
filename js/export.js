@@ -121,12 +121,29 @@ async function shareChat(chatId) {
             sharedAt: new Date().toISOString()
         });
 
-        // Copy to clipboard
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-            await navigator.clipboard.writeText(shareUrl);
-            emit('toast:show', 'Share link copied to clipboard', 'success');
-        } else {
-            // Fallback for browsers without clipboard API
+        // Web Share requires a user gesture and is most useful on mobile.
+        const mobile = navigator.userAgentData?.mobile || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+            || window.matchMedia?.('(pointer: coarse)').matches;
+        if (mobile && typeof navigator.share === 'function') {
+            try {
+                await navigator.share({ url: shareUrl });
+                return;
+            } catch (error) {
+                // Dismissing the native sheet is not a request to copy instead.
+                if (error.name === 'AbortError') return;
+            }
+        }
+
+        let copied = false;
+        if (navigator.clipboard?.writeText) {
+            try {
+                await navigator.clipboard.writeText(shareUrl);
+                copied = true;
+            } catch {
+                // Try the legacy path below when clipboard permission is denied.
+            }
+        }
+        if (!copied) {
             const textArea = document.createElement('textarea');
             textArea.value = shareUrl;
             textArea.style.position = 'fixed';
@@ -137,15 +154,12 @@ async function shareChat(chatId) {
             textArea.select();
 
             try {
-                document.execCommand('copy');
-                emit('toast:show', 'Share link copied to clipboard', 'success');
-            } catch (error) {
-                console.error('Failed to copy share link:', error);
-                emit('toast:show', 'Failed to copy share link. URL: ' + shareUrl, 'error');
+                copied = document.execCommand('copy');
             } finally {
                 document.body.removeChild(textArea);
             }
         }
+        emit('toast:show', copied ? 'Share link copied to clipboard' : 'Could not copy the share link.', copied ? 'success' : 'error');
     } catch (error) {
         console.error('Failed to share chat:', error);
         emit('toast:show', 'Failed to generate share link', 'error');

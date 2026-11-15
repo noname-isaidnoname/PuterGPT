@@ -15,10 +15,14 @@ import { initializeGenerationParams } from './generation-params.js';
 import { initializeVoiceInput } from './voice-input.js';
 import './variants.js';
 import './compare.js';
+import { registerPWA } from './pwa.js';
+import { initializeShortcuts } from './shortcuts.js';
+import { installDialogGuard } from './modal-helper.js';
 import { loadCustomThemes } from './theme-generator.js';
 import { emit } from './event-bus.js';
 
 // Main Application Initialization
+installDialogGuard();
 window.addEventListener('load', async () => {
     await bootstrap();
 });
@@ -26,6 +30,7 @@ window.addEventListener('load', async () => {
 async function bootstrap() {
     initializeGenerationParams();
     initializeVoiceInput();
+    initializeShortcuts();
     // Perform migration if needed
     await migrateFromLocalStorage();
     await bootstrapThemes();
@@ -70,6 +75,7 @@ async function bootstrap() {
     initializeImportHandling();
     initializeEventListeners();
     initializeWelcomeMode();
+    registerPWA();
 
     // Check for shared chat URL
     import('./export.js').then(m => m.loadSharedChat());

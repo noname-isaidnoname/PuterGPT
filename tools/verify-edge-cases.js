@@ -9,7 +9,7 @@
 // page boots offline and fast — before this, each scenario waited on the
 // real ~576 KB models fetch.
 // Scenarios are independent (each gets a fresh browser context), so they are
-// run concurrently — set EDGE_CONCURRENCY=1 to force sequential output.
+// run concurrently — adaptive default 4–6, EDGE_CONCURRENCY=1 for sequential.
 // Runs on Playwright only (lightpanda has no route interception).
 //
 // Usage: node tools/verify-edge-cases.js [--base-url URL] [--screenshot-dir DIR]
@@ -103,15 +103,20 @@ async function main() {
   // Fresh page (fresh context) per scenario; route interception mocks the
   // Puter API. The models/details endpoint is mocked too so boots don't hit
   // the network. page.close() also closes the context.
-  const newPage = async (route, init) => {
+  const newPage = async (route, init, allowServiceWorkers = false) => {
     const ctx = await browser.newContext({
       viewport: { width: 1280, height: 800 },
       permissions: ['clipboard-read', 'clipboard-write'],
+      serviceWorkers: allowServiceWorkers ? 'allow' : 'block',
     });
     if (init) await ctx.addInitScript(init);
     const page = await ctx.newPage();
     page.on('console', m => { if (m.type() === 'error') trackConsoleError(m.text()); });
     page.on('pageerror', e => { trackPageError(String(e)); });
+    page.on('dialog', dialog => {
+      trackPageError(`Unexpected native ${dialog.type()} dialog`);
+      dialog.dismiss().catch(() => {});
+    });
     await page.route('**/puterai/chat/models/details', r =>
       r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(CANNED_MODELS) }));
     if (route) await page.route('**/drivers/call', route);
@@ -127,16 +132,14 @@ async function main() {
     return page;
   };
 
-  // Seed a fake token via the settings UI
+  // Generation tests need a token, not a full settings interaction. Token UI
+  // creation and deletion are exercised independently in Tests 7 and 17.
   const seedToken = async (page) => {
-    await page.click('button.settings-row');
-    await page.click('.settings-tab[data-tab="tokens"]');
-    await page.fill('#token-name', 'Test Token');
-    await page.fill('#token-value', 'fake-token-for-ui-test');
-    await page.click('#add-token-btn');
-    await sleep(300);
-    await page.click('.settings-footer .btn.primary'); // Save
-    await sleep(200);
+    await page.evaluate(async () => {
+      const { tokenManager } = await import('./js/token-manager.js');
+      await tokenManager.initialized;
+      await tokenManager.addToken('Test Token', 'fake-token-for-ui-test');
+    });
   };
 
   // DOM click (works for non-interactive elements, unlike hit-tested clicks)
@@ -146,6 +149,276 @@ async function main() {
     el.click();
     return true;
   }, sel);
+
+  scenario('Share uses native mobile sheet and falls back safely', async () => {
+    const page = await newPage(null, () => {
+      window.__shareMode = 'success';
+      window.__shares = [];
+      window.__copies = [];
+      const originalMatchMedia = window.matchMedia.bind(window);
+      window.__coarse = true;
+      window.matchMedia = query => query === '(pointer: coarse)' ? { matches: window.__coarse } : originalMatchMedia(query);
+      Object.defineProperty(navigator, 'share', { configurable: true, value: async data => {
+        window.__shares.push(data);
+        if (window.__shareMode === 'cancel') throw new DOMException('Dismissed', 'AbortError');
+        if (window.__shareMode === 'fail') throw new Error('Not supported');
+      } });
+      Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async text => window.__copies.push(text) } });
+    });
+    try {
+      await page.evaluate(async () => {
+        const { db } = await import('./js/indexeddb-storage.js');
+        await db.chats.put({ id: 'share-test', title: 'Shared', lastModified: Date.now(), messages: [{ role: 'user', content: 'Hello' }] });
+        const { emit } = await import('./js/event-bus.js');
+        await import('./js/export.js');
+        emit('chat:share', 'share-test');
+      });
+      await page.waitForFunction(() => window.__shares.length === 1);
+      check(await page.evaluate(() => window.__shares[0].url.includes('#shared=') && window.__copies.length === 0), 'Mobile uses native share with generated URL');
+      await page.evaluate(async () => {
+        window.__shareMode = 'cancel';
+        (await import('./js/event-bus.js')).emit('chat:share', 'share-test');
+      });
+      await page.waitForFunction(() => window.__shares.length === 2);
+      check(await page.evaluate(() => window.__copies.length === 0), 'Cancel does not copy the link');
+      await page.evaluate(async () => {
+        window.__shareMode = 'fail';
+        (await import('./js/event-bus.js')).emit('chat:share', 'share-test');
+      });
+      await page.waitForFunction(() => window.__copies.length === 1);
+      check(true, 'Native-share failure falls back to clipboard');
+      await page.evaluate(async () => {
+        window.__coarse = false;
+        (await import('./js/event-bus.js')).emit('chat:share', 'share-test');
+      });
+      await page.waitForFunction(() => window.__copies.length === 2);
+      check(await page.evaluate(() => window.__shares.length === 3), 'Desktop keeps clipboard sharing');
+    } finally {
+      await page.close();
+    }
+  });
+
+  scenario('Native dialog guard returns safe defaults and async helpers settle', async () => {
+    const page = await newPage();
+    try {
+      const defaults = await page.evaluate(() => ({
+        confirm: window.confirm('<img src=x onerror=alert(1)>'),
+        prompt: null
+      }));
+      check(defaults.confirm === false, 'Synchronous confirm returns false');
+      await page.waitForSelector('.modal-overlay.active #confirm-btn');
+      check(await page.locator('.modal-overlay.active img').count() === 0, 'Guard escapes untrusted dialog text');
+      await page.waitForFunction(() => Number(getComputedStyle(document.querySelector('.modal-overlay.active')).opacity) > 0.99);
+      await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'dialog-guard-desktop.png') });
+      await page.setViewportSize({ width: 420, height: 850 });
+      await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'dialog-guard-mobile.png') });
+      await page.setViewportSize({ width: 1280, height: 800 });
+      await page.click('.modal-overlay.active #confirm-btn');
+      const promptDefault = await page.evaluate(() => window.prompt('Enter value', 'original'));
+      check(promptDefault === null, 'Synchronous prompt returns null');
+      await page.waitForSelector('.modal-overlay.active #prompt-cancel-btn');
+      await page.click('.modal-overlay.active #prompt-cancel-btn');
+      await page.evaluate(async () => {
+        const { confirmAsync } = await import('./js/modal-helper.js');
+        window.__dialogResult = 'pending';
+        confirmAsync('Proceed?').then(value => { window.__dialogResult = value; });
+      });
+      await page.waitForSelector('.modal-overlay.active #confirm-btn');
+      await page.click('.modal-overlay.active #confirm-btn');
+      await page.waitForFunction(() => window.__dialogResult === true);
+      check(true, 'Async confirmation returns the selected result');
+      await page.evaluate(async () => {
+        const { promptAsync } = await import('./js/modal-helper.js');
+        window.__dialogResult = 'pending';
+        promptAsync('Value?').then(value => { window.__dialogResult = value; });
+      });
+      await page.waitForSelector('.modal-overlay.active #prompt-modal-input');
+      await page.fill('.modal-overlay.active #prompt-modal-input', 'answer');
+      await page.press('.modal-overlay.active #prompt-modal-input', 'Enter');
+      await page.waitForFunction(() => window.__dialogResult === 'answer');
+      check(true, 'Async prompt returns entered text');
+      await page.evaluate(async () => {
+        const { confirmAsync } = await import('./js/modal-helper.js');
+        window.__dialogResult = 'pending';
+        confirmAsync('Dismiss?').then(value => { window.__dialogResult = value; });
+      });
+      await page.waitForSelector('.modal-overlay.active #cancel-btn');
+      await page.keyboard.press('Escape');
+      await page.waitForFunction(() => window.__dialogResult === false);
+      check(true, 'Dismissed async dialog resolves safely');
+    } finally {
+      await page.close();
+    }
+  });
+
+  scenario('Modal focus, theme keyboard access and reduced motion', async () => {
+    const page = await newPage();
+    try {
+      await page.focus('#shortcuts-help');
+      await page.evaluate(async () => {
+        const { createConfirmModal } = await import('./js/modal-helper.js');
+        createConfirmModal({ title: 'First dialog', onConfirm: () => {} });
+      });
+      await page.waitForFunction(() => document.querySelector('.modal-overlay.active .modal')?.contains(document.activeElement));
+      const dialog = page.locator('.modal-overlay.active .modal').last();
+      check(await dialog.getAttribute('role') === 'dialog' && await dialog.getAttribute('aria-modal') === 'true'
+        && !!(await dialog.getAttribute('aria-labelledby')), 'Modal has dialog semantics and an accessible label');
+      check(!(await dialog.innerText()).includes('undefined'), 'Confirmation without a body has no placeholder text');
+      await page.waitForFunction(() => Number(getComputedStyle(document.querySelector('.modal-overlay.active')).opacity) > 0.99);
+      await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'a11y-modal-desktop.png') });
+      await page.setViewportSize({ width: 420, height: 850 });
+      await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'a11y-modal-mobile.png') });
+      await page.setViewportSize({ width: 1280, height: 800 });
+      await page.focus('.modal-overlay.active #cancel-btn');
+      await page.keyboard.press('Shift+Tab');
+      check(await page.evaluate(() => document.activeElement.id) === 'confirm-btn', 'Shift+Tab wraps to last control');
+      await page.keyboard.press('Tab');
+      check(await page.evaluate(() => document.activeElement.id) === 'cancel-btn', 'Tab wraps to first control');
+      await page.evaluate(() => document.getElementById('sidebar-filter').focus());
+      check(await page.evaluate(() => !!document.activeElement.closest('.modal-overlay.active')), 'Programmatic focus cannot escape the modal');
+      await page.evaluate(async () => {
+        const { createConfirmModal } = await import('./js/modal-helper.js');
+        createConfirmModal({ title: 'Nested dialog', onConfirm: () => {} });
+      });
+      await page.waitForFunction(() => document.querySelectorAll('.modal-overlay.active .modal').length === 2);
+      await page.keyboard.press('Escape');
+      check(await page.locator('.modal-overlay.active .modal').count() === 1, 'Escape closes only the top nested dialog');
+      check(await page.evaluate(() => !!document.activeElement.closest('.modal-overlay.active')), 'Closing nested dialog restores focus to its parent');
+      await page.keyboard.press('Escape');
+      check(await page.evaluate(() => document.activeElement.id) === 'shortcuts-help', 'Closing modal restores the original focus');
+
+      await page.click('button.settings-row');
+      await page.click('.settings-tab[data-tab="appearance"]');
+      await page.keyboard.press('Tab'); // Data tab
+      await page.keyboard.press('Tab'); // Light theme card
+      check(await page.evaluate(() => document.activeElement?.dataset.themeCard === 'light'), 'Theme card is reachable by keyboard');
+      const focusStyle = await page.locator('.theme-card[data-theme-card="light"]').evaluate(el => getComputedStyle(el).outlineStyle);
+      await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'a11y-theme-focus.png') });
+      await page.keyboard.press('Enter');
+      await page.waitForFunction(() => document.querySelector('.theme-card[data-theme-card="light"]').getAttribute('aria-pressed') === 'true');
+      check(focusStyle !== 'none', 'Theme cards have a visible keyboard focus outline');
+      check(true, 'Theme card can be activated with Enter');
+      await page.keyboard.press('Tab');
+      await page.keyboard.press('Space');
+      await page.waitForFunction(() => document.querySelector('.theme-card[data-theme-card="dark"]').getAttribute('aria-pressed') === 'true');
+      check(true, 'Theme card can be activated with Space');
+
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      const motion = await page.evaluate(() => {
+        const dot = document.createElement('div');
+        dot.className = 'dot';
+        document.body.appendChild(dot);
+        const animation = getComputedStyle(dot).animationDuration;
+        const transition = getComputedStyle(document.querySelector('.settings-modal')).transitionDuration;
+        dot.remove();
+        return { animation, transition };
+      });
+      check(parseFloat(motion.animation) <= 0.01 && parseFloat(motion.transition) <= 0.01, 'Reduced motion shortens animations and transitions');
+    } finally {
+      await page.close();
+    }
+  });
+
+  scenario('Keyboard shortcuts respect focus and export the active chat', async () => {
+    const page = await newPage();
+    try {
+      await page.fill('#user-input', 'Draft');
+      await page.keyboard.press('Control+,');
+      check(!(await page.locator('#settings-modal').evaluate(el => el.classList.contains('active'))), 'Settings shortcut ignored while typing');
+      await page.keyboard.press('Control+Shift+E');
+      check(await page.inputValue('#user-input') === 'Draft', 'Export shortcut ignored while typing');
+      await page.keyboard.press('Control+K');
+      check(await page.evaluate(() => document.activeElement.id) === 'sidebar-filter', 'Ctrl+K focuses filter from composer');
+      await page.fill('#sidebar-filter', '?');
+      check(await page.locator('.shortcut-dialog').count() === 0, 'Question mark remains text in an input');
+      await page.evaluate(() => document.activeElement.blur());
+      await page.keyboard.type('?');
+      await page.waitForSelector('.shortcut-dialog');
+      await page.waitForFunction(() => {
+        const overlay = document.querySelector('.shortcut-dialog')?.closest('.modal-overlay');
+        return overlay && Number(getComputedStyle(overlay).opacity) > 0.99;
+      });
+      check(await page.locator('.shortcut-row').count() === 4, 'Question mark opens shortcut guide');
+      await page.keyboard.press('Control+K');
+      check(await page.evaluate(() => document.activeElement.id !== 'sidebar-filter'), 'Shortcuts do not focus behind an open dialog');
+      await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'shortcuts-desktop.png') });
+      await page.setViewportSize({ width: 420, height: 850 });
+      await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'shortcuts-mobile.png') });
+      await page.keyboard.press('Escape');
+      check(await page.locator('.shortcut-dialog').count() === 0, 'Escape closes the guide');
+      await page.fill('#user-input', 'Draft');
+      await page.keyboard.press('Control+K');
+      check(await page.evaluate(() => document.activeElement.id === 'sidebar-filter' && document.getElementById('sidebar').classList.contains('open')), 'Ctrl+K opens mobile sidebar and focuses filter');
+      await page.setViewportSize({ width: 1280, height: 800 });
+      await page.evaluate(async () => {
+        const { db } = await import('./js/indexeddb-storage.js');
+        await db.chats.put({ id: 'export-key', title: 'Shortcut', messages: [{ role: 'user', content: 'Hello' }], lastModified: Date.now() });
+        await window.loadChat('export-key');
+        document.activeElement.blur();
+      });
+      const [download] = await Promise.all([
+        page.waitForEvent('download'),
+        page.keyboard.press('Control+Shift+E')
+      ]);
+      check(download.suggestedFilename().endsWith('.json'), 'Export shortcut downloads the current chat');
+      await page.keyboard.press('Control+,');
+      check(await page.locator('#settings-modal').evaluate(el => el.classList.contains('active')), 'Settings shortcut opens settings outside inputs');
+    } finally {
+      await page.close();
+    }
+  });
+
+  scenario('PWA caches the shell but never caches API requests', async () => {
+    const page = await newPage(null, null, true);
+    try {
+      await page.waitForFunction(() => !!navigator.serviceWorker.controller, null, { timeout: 30000 });
+      check(true, 'Service worker installed and controls the page');
+      const manifest = await page.evaluate(async () => {
+        const response = await fetch(document.querySelector('link[rel="manifest"]').href);
+        return response.json();
+      });
+      check(manifest.start_url === './' && manifest.icons.length >= 2, 'Install manifest has scoped start URL and icons');
+      await page.route('https://api.puter.com/pwa-cache-probe', route =>
+        route.fulfill({ status: 200, contentType: 'text/plain', body: 'network response' }));
+      const apiResult = await page.evaluate(async () => {
+        const cache = await caches.open('putergpt-test-api');
+        await cache.put('https://api.puter.com/pwa-cache-probe', new Response('cached response'));
+        const value = await (await fetch('https://api.puter.com/pwa-cache-probe')).text();
+        await caches.delete('putergpt-test-api');
+        return value;
+      });
+      check(apiResult === 'network response', 'API request bypasses cached responses');
+      const apiCached = await page.evaluate(async () => !!(await caches.match('https://api.puter.com/pwa-cache-probe')));
+      check(!apiCached, 'API response was not stored by the service worker');
+      await page.context().setOffline(true);
+      const offlineShell = await page.evaluate(async () => (await fetch('./js/app.js')).text());
+      check(offlineShell.includes('bootstrap'), 'Application shell is available offline');
+      const offlinePage = await page.context().newPage();
+      try {
+        await offlinePage.goto(baseUrl + '/', { waitUntil: 'load' });
+        await offlinePage.waitForFunction(() => document.getElementById('main')?.classList.contains('welcome-mode'), null, { timeout: 15000 });
+        check(true, 'Cached application boots offline');
+      } finally {
+        await offlinePage.close();
+      }
+      await page.context().setOffline(false);
+      await page.evaluate(() => navigator.serviceWorker.register('./sw.js?update-test=1'));
+      await page.waitForFunction(() => [...document.querySelectorAll('.toast')].some(el => el.textContent.includes('An update is available')), null, { timeout: 30000 });
+      check(true, 'Waiting service worker announces an update');
+      await page.waitForSelector('.toast.show');
+      await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'pwa-update.png') });
+      await page.setViewportSize({ width: 420, height: 850 });
+      await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'pwa-update-mobile.png') });
+      await Promise.all([
+        page.waitForEvent('load', { timeout: 30000 }),
+        page.locator('.toast').filter({ hasText: 'An update is available' }).getByRole('button', { name: 'Reload' }).click()
+      ]);
+      check(true, 'User accepts update and reloads into the new worker');
+    } finally {
+      await page.context().setOffline(false);
+      await page.close();
+    }
+  });
 
   scenario('Comparison streams independently without changing the chat', async () => {
     const requests = [];
@@ -801,7 +1074,8 @@ async function main() {
 
   // Run scenarios concurrently; each gets its own store for output and
   // console/page error attribution. EDGE_CONCURRENCY=1 forces sequential.
-  const CONCURRENCY = Math.max(1, parseInt(process.env.EDGE_CONCURRENCY || '4', 10) || 4);
+  const defaultConcurrency = Math.min(6, Math.max(4, Math.floor((os.availableParallelism?.() || os.cpus().length) * 1.5)));
+  const CONCURRENCY = Math.max(1, parseInt(process.env.EDGE_CONCURRENCY || String(defaultConcurrency), 10) || defaultConcurrency);
   console.log(`[verify-edge-cases] running ${scenarios.length} scenario(s), concurrency ${CONCURRENCY}`);
   const results = new Array(scenarios.length);
   let next = 0;

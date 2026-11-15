@@ -2,6 +2,17 @@
 import { emit } from './event-bus.js';
 import { escapeHtml } from './utils.js';
 
+const modalStack = [];
+let modalId = 0;
+const focusSelector = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+function focusableElements(dialog) {
+    return [...dialog.querySelectorAll(focusSelector)].filter(element =>
+        !element.closest('[inert], [hidden], [aria-hidden="true"]')
+        && element.getClientRects().length > 0
+        && getComputedStyle(element).visibility !== 'hidden');
+}
+
 /**
  * Create a modal overlay with the given inner HTML, attach it to <body>,
  * make it active, and wire up the close-on-overlay-click / close-on-Escape
@@ -10,26 +21,74 @@ import { escapeHtml } from './utils.js';
  * unregisters its Escape listener — always remove via `modal.remove()`.
  */
 export function createModal(htmlContent) {
+    const previousFocus = document.activeElement;
     const modal = document.createElement('div');
     modal.className = 'modal-overlay';
     modal.innerHTML = htmlContent;
+    const dialog = modal.querySelector('.modal') || modal;
+    dialog.setAttribute('role', 'dialog');
+    dialog.setAttribute('aria-modal', 'true');
+    if (!dialog.hasAttribute('aria-labelledby') && !dialog.hasAttribute('aria-label')) {
+        const heading = dialog.querySelector('h1, h2, h3, h4, h5, h6');
+        if (heading) {
+            if (!heading.id) heading.id = `dynamic-modal-title-${++modalId}`;
+            dialog.setAttribute('aria-labelledby', heading.id);
+        } else {
+            dialog.setAttribute('aria-label', 'Dialog');
+        }
+    }
+    if (!dialog.hasAttribute('tabindex')) dialog.tabIndex = -1;
     document.body.appendChild(modal);
+    modalStack.push(modal);
+    const isTop = () => modalStack[modalStack.length - 1] === modal;
+    const focusFirst = () => (focusableElements(dialog)[0] || dialog).focus();
 
     // Animate in
-    setTimeout(() => modal.classList.add('active'), 10);
+    setTimeout(() => {
+        if (!modal.isConnected) return;
+        modal.classList.add('active');
+        if (isTop() && !modal.contains(document.activeElement)) focusFirst();
+    }, 10);
 
-    // Close on Escape
-    const handleEscape = (e) => {
+    const handleKey = (e) => {
+        if (!isTop()) return;
         if (e.key === 'Escape') {
+            e.preventDefault();
+            e.stopImmediatePropagation();
             modal.remove();
+        } else if (e.key === 'Tab') {
+            const elements = focusableElements(dialog);
+            if (!elements.length) {
+                e.preventDefault();
+                dialog.focus();
+                return;
+            }
+            const index = elements.indexOf(document.activeElement);
+            if (index === -1 || (e.shiftKey && index === 0) || (!e.shiftKey && index === elements.length - 1)) {
+                e.preventDefault();
+                (e.shiftKey ? elements[elements.length - 1] : elements[0]).focus();
+            }
         }
+    };
+    const handleFocus = (e) => {
+        if (isTop() && modal.classList.contains('active') && !modal.contains(e.target)) focusFirst();
     };
     // Ensure every removal path unregisters the Escape listener, no matter
     // who calls the element's remove().
     const nativeRemove = modal.remove.bind(modal);
     modal.remove = () => {
-        document.removeEventListener('keydown', handleEscape);
+        const wasTop = isTop();
+        const index = modalStack.indexOf(modal);
+        if (index < 0) return;
+        modalStack.splice(index, 1);
+        document.removeEventListener('keydown', handleKey, true);
+        document.removeEventListener('focusin', handleFocus, true);
         nativeRemove();
+        if (wasTop && previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus();
+        else if (wasTop && modalStack.length) {
+            const parentDialog = modalStack[modalStack.length - 1].querySelector('.modal');
+            if (parentDialog) (focusableElements(parentDialog)[0] || parentDialog).focus();
+        }
     };
 
     // Close on overlay click (not on inner content)
@@ -39,7 +98,8 @@ export function createModal(htmlContent) {
         }
     });
 
-    document.addEventListener('keydown', handleEscape);
+    document.addEventListener('keydown', handleKey, true);
+    document.addEventListener('focusin', handleFocus, true);
 
     return modal;
 }
@@ -61,7 +121,7 @@ export function createModal(htmlContent) {
  */
 export function createConfirmModal({
     title,
-    body,
+    body = '',
     confirmLabel = 'Confirm',
     cancelLabel = 'Cancel',
     onConfirm,
@@ -187,6 +247,54 @@ export function createPromptModal({
     }, 60);
 
     return modal;
+}
+
+// Promise-based alternatives for code that needs the actual answer. Escape and
+// overlay dismissal settle with the same safe defaults as Cancel.
+export function confirmAsync(message = '') {
+    return new Promise(resolve => {
+        let answer = false;
+        const modal = createConfirmModal({
+            title: 'Confirm',
+            body: `<p>${escapeHtml(message)}</p>`,
+            onConfirm: () => { answer = true; }
+        });
+        const remove = modal.remove.bind(modal);
+        modal.remove = () => { remove(); resolve(answer); };
+    });
+}
+
+export function promptAsync(message = '', defaultValue = '') {
+    return new Promise(resolve => {
+        let answer = null;
+        const modal = createPromptModal({
+            title: 'Input',
+            message: escapeHtml(message),
+            label: 'Value',
+            defaultValue: String(defaultValue ?? ''),
+            allowEmpty: true,
+            onConfirm: value => { answer = value; }
+        });
+        const remove = modal.remove.bind(modal);
+        modal.remove = () => { remove(); resolve(answer); };
+    });
+}
+
+export function installDialogGuard() {
+    const development = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
+    const warn = name => {
+        if (development) console.warn(`[dialog-guard] window.${name} is synchronous; use ${name}Async() instead.`);
+    };
+    window.confirm = message => {
+        warn('confirm');
+        void confirmAsync(message);
+        return false;
+    };
+    window.prompt = (message, defaultValue) => {
+        warn('prompt');
+        void promptAsync(message, defaultValue);
+        return null;
+    };
 }
 
 /**

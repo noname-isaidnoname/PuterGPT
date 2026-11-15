@@ -229,12 +229,13 @@
 /* Sidebar footer: settings row */
 .sidebar-footer {
     display: flex;
-    align-items: center;
+    flex-direction: column;
+    align-items: stretch;
     flex-shrink: 0;
-    height: 60px;
+    height: auto;
     border-top: 1px solid var(--border-color);
     margin: 0 -12px;
-    padding: 0 12px;
+    padding: 6px 12px;
 }
 
 .settings-row {
@@ -244,7 +245,7 @@
     box-sizing: border-box;
     width: 100%;
     padding: 8px 6px;
-    margin-block: auto;
+    margin: 0;
     border: none;
     border-radius: var(--radius-md);
     background: none;

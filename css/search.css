@@ -487,6 +487,52 @@ input.search-input {
     color: var(--text-secondary);
 }
 
+.shortcut-dialog {
+    max-width: 480px;
+}
+
+.shortcut-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.shortcut-dialog p {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    line-height: 1.5;
+}
+
+.shortcut-list {
+    display: flex;
+    flex-direction: column;
+}
+
+.shortcut-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border-color);
+    font-size: 0.9rem;
+}
+
+.shortcut-row:last-child {
+    border-bottom: 0;
+}
+
+.shortcut-dialog .search-shortcuts {
+    display: flex;
+    flex-shrink: 0;
+    font-size: 0.8rem;
+}
+
+.shortcut-dialog .search-shortcuts kbd {
+    font-size: 0.8rem;
+}
+
 .search-footer-actions {
     display: flex;
     gap: 10px;

@@ -87,10 +87,32 @@
     transform: translateX(-50%) translateY(0);
 }
 
+.toast.toast-actionable {
+    pointer-events: auto;
+    display: flex;
+    align-items: center;
+    width: max-content;
+    white-space: normal;
+}
+
+.toast-actionable .btn {
+    margin-left: 10px;
+    flex-shrink: 0;
+}
+
 .toast.hiding {
     opacity: 0;
 }
 
 .hidden {
     display: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
 }

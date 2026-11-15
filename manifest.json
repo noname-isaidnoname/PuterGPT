@@ -1,0 +1,15 @@
+{
+  "id": "./",
+  "name": "PuterGPT",
+  "short_name": "PuterGPT",
+  "description": "A browser-based AI chat client for Puter.ai models.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#151518",
+  "theme_color": "#151518",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}
