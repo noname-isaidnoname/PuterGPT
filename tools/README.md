@@ -57,7 +57,7 @@ Options (env vars or flags):
 - `--timeout SECONDS` / `VERIFY_TIMEOUT` — per-harness kill timeout (default 180s)
 - `EDGE_CONCURRENCY` — parallelism for verify-edge-cases scenarios (adaptive default 4–6; 1 = sequential)
 - `--base-url URL` / `BASE_URL` — test against an already-running server instead of the built-in one (e.g. `BASE_URL=http://localhost:8765 node tools/verify-settings.js`)
-- `--screenshot-dir DIR` / `SCREENSHOT_DIR` — where screenshots go (default: `$TMPDIR/putergpt-tools`; ignored by the lightpanda backend)
+- `--screenshot-dir DIR` / `SCREENSHOT_DIR` — where screenshots go (default: `$TMPDIR/putergpt-tools`; ignored by the lightpanda backend). Harness output is a scratch artifact; if a screenshot is meant for the documentation, point this at `screenshots/` in the repo (or copy it there) so it can be committed and referenced from the docs
 - `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` — force a specific chromium binary
 - `LIGHTPANDA_PATH` — force a specific lightpanda binary
 

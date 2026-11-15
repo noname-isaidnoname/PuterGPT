@@ -25,4 +25,4 @@ The Playwright runs capture screenshots for visual inspection. Generation and st
 
 Install the versioned pre-commit hook with `sh tools/install-hooks.sh`. It checks JavaScript syntax, runs the applicable verification harnesses, and blocks a failing commit. The hook can be bypassed in an emergency with `git commit --no-verify`.
 
-When changing cached app files, update the service worker cache version and maintain its app-shell asset list. Do not cache Puter API responses. Keep secrets, user data, and generated screenshots out of commits.
+When changing cached app files, update the service worker cache version and maintain its app-shell asset list. Do not cache Puter API responses. Keep secrets, user data, and ad-hoc generated screenshots out of commits; screenshots under `screenshots/` that are used by the documentation are fine to commit.
