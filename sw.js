@@ -1,5 +1,5 @@
 // Bump this version whenever any cached application or CDN asset changes.
-const CACHE_NAME = 'putergpt-shell-v7';
+const CACHE_NAME = 'putergpt-shell-v8';
 const APP_SHELL = [
     './', './index.html', './manifest.json', './icons/icon-192.png', './icons/icon-512.png',
     './css/base.css', './css/sidebar.css', './css/chat.css', './css/message-actions.css',

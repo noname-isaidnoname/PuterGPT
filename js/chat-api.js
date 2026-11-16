@@ -332,47 +332,22 @@ async function generateTitleWithRetry(apiToken, modelId, messages) {
     return '';
 }
 
-// One-off (non-streaming) title completion. The shared stream helper can't
-// read Puter's non-stream response shape ({success, result: {message: {content}}}),
-// so this does its own fetch. Falls back to NDJSON parsing in case the driver
-// streams anyway. Returns the raw message content string ('' on odd shapes).
+// One-off (non-streaming) title completion. The shared helper handles
+// Puter's non-stream response shape ({success, result: {message: {content}}})
+// natively now, including the driver "streaming anyway" as NDJSON. Errors
+// propagate (the helper throws after reporting) and are retried by the caller.
 async function requestTitleCompletion(apiToken, modelId, messages) {
-    const resp = await fetch('https://api.puter.com/drivers/call', {
-        method: 'POST',
-        headers: buildRequestHeaders(apiToken),
-        body: JSON.stringify({
+    let content = '';
+    await streamPuterCompletion({
+        apiUrl: "https://api.puter.com/drivers/call",
+        requestBody: {
             interface: 'puter-chat-completion', driver: 'ai-chat', test_mode: true, method: 'complete',
             args: { model: modelId, stream: false, messages }
-        })
+        },
+        headers: buildRequestHeaders(apiToken),
+        onComplete: (final) => { content = final.accumulatedContent || ''; }
     });
-    const text = await resp.text();
-    if (!resp.ok) throw new Error(`Title request failed: ${resp.status} ${text.slice(0, 200)}`);
-    // Single JSON response (the normal case for stream: false).
-    try {
-        return extractContentFromObject(JSON.parse(text));
-    } catch { /* maybe NDJSON — fall through */ }
-    // NDJSON fallback (driver streamed anyway).
-    let accumulated = '';
-    for (const line of text.split('\n')) {
-        const trimmed = line.trim();
-        if (!trimmed) continue;
-        try { accumulated += extractContentFromObject(JSON.parse(trimmed)); } catch { /* skip bad lines */ }
-    }
-    return accumulated;
-}
-
-function extractContentFromObject(obj) {
-    if (!obj || typeof obj !== 'object') return '';
-    // Reasoning models may emit the thought inline — strip it so only the answer remains.
-    const content = obj?.result?.message?.content
-        ?? obj?.result?.output
-        ?? obj?.message?.content
-        ?? obj?.text
-        ?? obj?.content
-        ?? obj?.choices?.[0]?.message?.content
-        ?? obj?.result?.choices?.[0]?.message?.content
-        ?? '';
-    return typeof content === 'string' ? content : JSON.stringify(content);
+    return content;
 }
 
 // Models frequently wrap reasoning in inline tags even in content — drop those
@@ -508,11 +483,14 @@ function handleStreamError(ctx, err, { currentToken, operationId }) {
             removeEmptyAssistantPlaceholder(ctx.aiMsgIndex);
             emit('messages:rerender');
         }
+        const friendly = err.code === 'NO_FALLBACK_MODEL'
+            ? 'Puter could not find a model to serve this request. Try a different model.'
+            : `Failed to generate response: ${err.message || err}`;
         if (currentToken && (currentToken.value || currentToken.token)) {
             tokenManager.markTokenFailed(currentToken.value || currentToken.token);
             emit('toast:show', `Token "${currentToken.name}" failed. ${tokenManager.rotationEnabled ? 'Rotating to next token.' : 'Please check token or enable rotation.'}`, 'error');
         } else {
-            emit('toast:show', `Failed to generate response: ${err.message || err}`, 'error');
+            emit('toast:show', friendly, 'error');
         }
     }
     settleGeneration();
