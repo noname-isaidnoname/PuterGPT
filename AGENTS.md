@@ -154,6 +154,21 @@ If `playwright` is installed but `chromium` binary isn't, Don't ask the user whe
 - Do NOT read tools/.env file in any way, printing the contents will have it land in your conversation history and potentially expose sensitive information. Scripts can read the file but should never print it to stdout.
 - The tools/.env file contains `PUTER_TOKEN`, use this token to authenticate with the Puter API if needed.
 
+## Plans (.plans/)
+
+`.plans/` is a **local-only** planning directory. **If `.plans/` does not exist, create it before writing any plan**: `mkdir -p .plans/{draft,proposed,ongoing,done}` and write `.plans/.gitignore` containing exactly `*` (ignore everything inside). Do not commit anything under `.plans/`. Plans are **Markdown files only** (`*.md`, never other formats). Lifecycle, strictly in order:
+
+1. **`.plans/draft/`** — where a plan is born. When asked to "write a plan for …" (e.g. modifying some code or adding new features), create the `.md` file here. Then **re-check the plan before it's considered ready**: re-read the actual source files it references, verify every claim, path, line number, function name and API behavior against the code (and against docs/tools where relevant), fix anything wrong, and repeat until it holds up. Do not skip the re-check pass — a plan that references things that don't exist is worse than none.
+2. **`.plans/proposed/`** — once the plan survives re-checking and looks good, `git mv`-style move (plain `mv`, it's untracked) the file from `draft/` to `proposed/`. That move *is* the "ready for implementation" signal.
+3. **`.plans/ongoing/`** — an agent implementing a plan **first moves the file(s) from `proposed/` to `ongoing/`** before writing code, and keeps the file updated as it works (check off steps, note deviations, blockers, decisions — update statuses inline rather than silently drifting from the plan). One plan in `ongoing/` = work in flight; don't start a second from `proposed/` without finishing or explicitly parking the first.
+4. **`.plans/done/`** — when implementation is finished and verified, move the file(s) from `ongoing/` to `done/`. Kept for archival/contextual purposes; treat `done/` as read-only history, not a backlog.
+
+Rules:
+- Never implement directly from `draft/` or `proposed/` without moving to `ongoing/` first — the directory *is* the status tracker.
+- If a plan turns out to be wrong or obsolete mid-flight, say so in the file (a short "Abandoned: <reason>" note) and move it to `done/` anyway, or back to `draft/` if it needs rework. Don't delete plans silently.
+- Multiple files per plan are fine (e.g. `plan.md` + `notes.md`); move them together.
+- Plans may reference AGENTS.md sections; keep both accurate when either changes.
+
 ## Commit conventions
 
 Short imperative summaries (`redesign: …` is fine). No attribution of tools/models in commit messages or code comments. Only commit what the user asked to be committed or if they simply asked to; the working tree should stay clean of scratch files (no `.fallow/`, `node_modules`, or stray screenshots — none of those belong in this repo). The exception is `screenshots/`: screenshots stored there and referenced by the documentation are part of the repository and may be committed. When in doubt about unrelated changes in the working tree, leave them alone.
