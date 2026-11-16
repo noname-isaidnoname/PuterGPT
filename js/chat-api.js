@@ -2,7 +2,7 @@ import { streamPuterCompletion } from 'https://noname-isaidnoname.github.io/MyAI
 import { state, els } from './state.js';
 import { tokenManager } from './token-manager.js';
 import { setState } from './store.js';
-import { estimateTokens, calculateMessageCost } from './models.js';
+import { estimateTokens, calculateMessageCost, isFreeModel } from './models.js';
 import { emit } from './event-bus.js';
 import { decorateCodeBlocks } from './chat-ui.js';
 import { getMessageText } from './utils.js';
@@ -430,7 +430,7 @@ async function generateChatTitle(chatId, userText, assistantText) {
     try {
         if ((await db.settings.get('auto_name_chats'))?.value === false) return;
         // Never incur a paid completion solely for a title.
-        const model = state.models.find(m => m.costInfo?.isFree && m.costInfo.inputCost === 0 && m.costInfo.outputCost === 0);
+        const model = state.models.find(isFreeModel);
         if (!model) return;
         const apiToken = await tokenManager.getApiToken();
         if (!apiToken) return;

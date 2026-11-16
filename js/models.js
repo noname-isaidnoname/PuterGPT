@@ -4,6 +4,17 @@ import { setState } from './store.js';
 import { emit } from './event-bus.js';
 
 /**
+ * Strict "free model" check: the id must end with `:free` AND the cost info
+ * must explicitly report 0 for both input and output (undefined/unknown does
+ * not count as free).
+ */
+export function isFreeModel(model) {
+    if (!model || typeof model.id !== 'string' || !model.id.endsWith(':free')) return false;
+    const cost = model.costInfo;
+    return !!cost && cost.inputCost === 0 && cost.outputCost === 0;
+}
+
+/**
  * Populate a <select> with <option> entries for the given model list.
  * @param {HTMLSelectElement} selectEl
  * @param {Array<{id: string, name?: string}>} models
@@ -104,9 +115,7 @@ export function filterModels() {
         if (!matchesQuery) return false;
         
         if (freeOnly) {
-            const isFreeByName = m.name && m.name.toLowerCase().includes('free');
-            const isFreeByCost = m.costInfo && m.costInfo.isFree;
-            return isFreeByName || isFreeByCost;
+            return isFreeModel(m);
         }
         
         return true;
@@ -203,7 +212,7 @@ function extractCostInfo(model) {
         inputCost: convertToUsdPerMillion(inputCost),
         outputCost: convertToUsdPerMillion(outputCost),
         currency: 'USD',
-        isFree: (inputCost === 0 || inputCost === null) && (outputCost === 0 || outputCost === null)
+        isFree: inputCost === 0 && outputCost === 0
     };
 }
 

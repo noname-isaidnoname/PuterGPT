@@ -1,6 +1,7 @@
 import { state, els } from './state.js';
 import { themeDefinitions } from './store.js';
 import { emit } from './event-bus.js';
+import { isFreeModel } from './models.js';
 import { reportStorageError } from './indexeddb-storage.js';
 
 // Custom themes storage
@@ -68,7 +69,7 @@ window.filterThemeModels = () => {
         const modelId = option.value;
         const model = state.models.find(m => m.id === modelId);
         const matchesSearch = option.textContent.toLowerCase().includes(searchTerm);
-        const isFree = model?.costInfo?.isFree || option.textContent.includes('(Free)');
+        const isFree = isFreeModel(model);
         const shouldShow = matchesSearch && (!freeOnly || isFree);
         
         option.style.display = shouldShow ? 'block' : 'none';
