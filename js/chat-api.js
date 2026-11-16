@@ -311,6 +311,121 @@ function handleComplete(ctx, final, { inputTokens, currentModel, currentToken, o
     }
 }
 
+// One-off (non-streaming) title completion. The shared stream helper can't
+// read Puter's non-stream response shape ({success, result: {message: {content}}}),
+// so this does its own fetch. Falls back to NDJSON parsing in case the driver
+// streams anyway. Returns the raw message content string ('' on odd shapes).
+async function requestTitleCompletion(apiToken, modelId, messages) {
+    const resp = await fetch('https://api.puter.com/drivers/call', {
+        method: 'POST',
+        headers: buildRequestHeaders(apiToken),
+        body: JSON.stringify({
+            interface: 'puter-chat-completion', driver: 'ai-chat', test_mode: true, method: 'complete',
+            args: { model: modelId, stream: false, messages }
+        })
+    });
+    const text = await resp.text();
+    if (!resp.ok) throw new Error(`Title request failed: ${resp.status} ${text.slice(0, 200)}`);
+    // Single JSON response (the normal case for stream: false).
+    try {
+        return extractContentFromObject(JSON.parse(text));
+    } catch { /* maybe NDJSON — fall through */ }
+    // NDJSON fallback (driver streamed anyway).
+    let accumulated = '';
+    for (const line of text.split('\n')) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        try { accumulated += extractContentFromObject(JSON.parse(trimmed)); } catch { /* skip bad lines */ }
+    }
+    return accumulated;
+}
+
+function extractContentFromObject(obj) {
+    if (!obj || typeof obj !== 'object') return '';
+    // Reasoning models may emit the thought inline — strip it so only the answer remains.
+    const content = obj?.result?.message?.content
+        ?? obj?.result?.output
+        ?? obj?.message?.content
+        ?? obj?.text
+        ?? obj?.content
+        ?? obj?.choices?.[0]?.message?.content
+        ?? obj?.result?.choices?.[0]?.message?.content
+        ?? '';
+    return typeof content === 'string' ? content : JSON.stringify(content);
+}
+
+// Models frequently wrap reasoning in inline tags even in content — drop those
+// sections so the JSON title can be found.
+function stripInlineReasoning(text) {
+    return (text || '')
+        .replace(/<(thought|think|reasoning)>[\s\S]*?<\/\1>/gi, '')
+        .replace(/<(thought|think|reasoning)>[\s\S]*$/i, '');
+}
+
+// Models frequently ignore the "JSON only" instruction, so accept the common
+// shapes they emit instead: a bare JSON object (possibly wrapped in prose or
+// code fences), single-quoted/Python-style dicts, nested objects, a
+// "Title: ..." line, or a bare title on its own line. Returns '' on failure.
+function parseGeneratedTitle(raw) {
+    const text = stripInlineReasoning((raw || '').trim()).trim();
+    if (!text) return '';
+
+    // 1. JSON object, possibly wrapped in prose or code fences.
+    const candidates = [text];
+    const match = text.match(/\{[\s\S]*\}/);
+    if (match) {
+        candidates.push(match[0]);
+        // Python-style dicts: {'title': 'Foo'}
+        candidates.push(match[0].replace(/'/g, '"'));
+    }
+    for (const candidate of candidates) {
+        try {
+            const title = extractTitleFromObject(JSON.parse(candidate));
+            if (title) return title;
+        } catch { /* try next candidate */ }
+    }
+
+    // 2. A "Title: ..." (or "Title - ..." / "title = ...") line anywhere in the text.
+    const lineMatch = text.match(/title\s*[:=\-–]\s*([^\n]+)/i);
+    if (lineMatch) {
+        const title = cleanTitleText(lineMatch[1]);
+        if (title) return title;
+    }
+
+    // 3. No JSON at all — assume the model answered with the title itself and
+    // use the last non-empty line (the title usually follows any preamble).
+    if (!text.includes('{')) {
+        const lines = text.split('\n').map(cleanTitleText).filter(Boolean);
+        if (lines.length) return lines[lines.length - 1];
+    }
+    return '';
+}
+
+function extractTitleFromObject(parsed, depth = 0) {
+    if (!parsed || typeof parsed !== 'object' || depth > 2) return '';
+    // Prefer a key that looks like "title" (case-insensitive).
+    for (const [key, value] of Object.entries(parsed)) {
+        if (/title/i.test(key) && typeof value === 'string' && value.trim()) return cleanTitleText(value);
+    }
+    // A single string-valued key is almost certainly the title.
+    const strings = Object.values(parsed).filter(v => typeof v === 'string' && v.trim());
+    if (strings.length === 1) return cleanTitleText(strings[0]);
+    // Otherwise recurse one level (e.g. {"response": {"title": "..."}}).
+    for (const value of Object.values(parsed)) {
+        const nested = extractTitleFromObject(value, depth + 1);
+        if (nested) return nested;
+    }
+    return '';
+}
+
+function cleanTitleText(s) {
+    return (s || '')
+        .replace(/^[\s*_`#"']+|[\s*_`#"']+$/g, '') // leading/trailing quotes, markdown, hashes
+        .replace(/\*\*|__/g, '')                   // emphasis markers
+        .replace(/[.\s]+$/, '')                    // trailing period
+        .trim();
+}
+
 async function generateChatTitle(chatId, userText, assistantText) {
     try {
         if ((await db.settings.get('auto_name_chats'))?.value === false) return;
@@ -320,28 +435,35 @@ async function generateChatTitle(chatId, userText, assistantText) {
         const apiToken = await tokenManager.getApiToken();
         if (!apiToken) return;
         let title = '';
-        await streamPuterCompletion({
-            apiUrl: 'https://api.puter.com/drivers/call',
-            requestBody: {
-                interface: 'puter-chat-completion', driver: 'ai-chat', test_mode: true, method: 'complete',
-                args: { model: model.id, stream: true, messages: [
-                    { role: 'system', content: 'Write a concise title of at most six words for this conversation. Return only the title.' },
-                    { role: 'user', content: `User: ${userText}\n\nAssistant: ${assistantText}` }
-                ] }
-            },
-            headers: buildRequestHeaders(apiToken),
-            onComplete: final => { title = final.accumulatedContent || ''; },
-            onError: () => {}
-        });
-        title = title.trim().replace(/^["'`#\s]+|["'`\s]+$/g, '').split(/\s+/).slice(0, 6).join(' ').slice(0, 100);
-        if (!title) return;
+        const titleMessages = [
+            { role: 'system', content: 'You are a title generator. Your only job is to invent a short title for a conversation. Rules: your entire response MUST be a single-line JSON object exactly of the form {"title": "your title here"}. The title must be at most six words and contain no double quotes. No explanation, no reasoning, no preamble, no markdown, no code fences, no extra keys, no trailing text. Output the JSON object and nothing else.' },
+            { role: 'user', content: `User: ${userText}\n\nAssistant: ${assistantText}` }
+        ];
+        try {
+            title = parseGeneratedTitle(await requestTitleCompletion(apiToken, model.id, titleMessages));
+        } catch (error) {
+            console.warn('Chat title generation request failed:', error);
+        }
+        title = title.replace(/^["'`#\s]+|["'`\s]+$/g, '').split(/\s+/).slice(0, 6).join(' ').slice(0, 100);
+        let usedFallback = false;
+        if (!title) {
+            const flat = userText.replace(/\s+/g, ' ').trim();
+            if (!flat) return;
+            title = flat.substring(0, 25) + (flat.length > 25 ? '...' : '');
+            usedFallback = true;
+        }
+        let applied = false;
         await db.transaction('rw', db.chats, async () => {
             const chat = await db.chats.get(chatId);
             if (!chat || chat.manuallyRenamed || chat.importedAt || chat.sharedAt
                 || getMessageText(chat.messages[0]).slice(0, 2000) !== userText
                 || getMessageText(chat.messages[1]).slice(0, 2000) !== assistantText) return;
             await db.chats.update(chatId, { title, autoNamed: true });
+            applied = true;
         });
+        if (applied && usedFallback) {
+            emit('toast:show', "Couldn't generate a chat title, so the start of your message was used instead.", 'warning');
+        }
         emit('chats:refresh-needed');
     } catch (error) {
         if (!reportStorageError(error)) console.warn('Could not generate chat title:', error);

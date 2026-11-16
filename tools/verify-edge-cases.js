@@ -1276,7 +1276,7 @@ async function main() {
       if (isTitle) {
         titleCalls++;
         return route.fulfill({ status: 200, contentType: 'application/x-ndjson',
-          body: '{"type":"text","text":"A Helpful Title"}\n' });
+          body: '{"type":"text","text":"{\\"title\\": \\"A Helpful Title\\"}"}\n' });
       }
       capturedArgs = body?.args || null;
       requestCount++;
