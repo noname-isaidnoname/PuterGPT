@@ -311,6 +311,27 @@ function handleComplete(ctx, final, { inputTokens, currentModel, currentToken, o
     }
 }
 
+const TITLE_MAX_ATTEMPTS = 3;
+// Last-resort free router when the primary free model can't produce a title.
+const TITLE_FALLBACK_MODEL = 'openrouter:openrouter/free';
+
+// Try a title completion up to TITLE_MAX_ATTEMPTS times (request errors and
+// unusable/empty responses all count as failures) with a short backoff.
+// Returns the parsed title, or '' if every attempt failed.
+async function generateTitleWithRetry(apiToken, modelId, messages) {
+    for (let attempt = 1; attempt <= TITLE_MAX_ATTEMPTS; attempt++) {
+        try {
+            const title = parseGeneratedTitle(await requestTitleCompletion(apiToken, modelId, messages));
+            if (title) return title;
+            console.warn(`Chat title generation attempt ${attempt}/${TITLE_MAX_ATTEMPTS} (model: ${modelId}) returned no usable title`);
+        } catch (error) {
+            console.warn(`Chat title generation attempt ${attempt}/${TITLE_MAX_ATTEMPTS} (model: ${modelId}) failed:`, error);
+        }
+        if (attempt < TITLE_MAX_ATTEMPTS) await new Promise(r => setTimeout(r, 300 * attempt));
+    }
+    return '';
+}
+
 // One-off (non-streaming) title completion. The shared stream helper can't
 // read Puter's non-stream response shape ({success, result: {message: {content}}}),
 // so this does its own fetch. Falls back to NDJSON parsing in case the driver
@@ -429,7 +450,7 @@ function cleanTitleText(s) {
 async function generateChatTitle(chatId, userText, assistantText) {
     try {
         if ((await db.settings.get('auto_name_chats'))?.value === false) return;
-        // Never incur a paid completion solely for a title.
+        // Never incur a paid completion solely for a title (the fallback router is free too).
         const model = state.models.find(isFreeModel);
         if (!model) return;
         const apiToken = await tokenManager.getApiToken();
@@ -439,10 +460,10 @@ async function generateChatTitle(chatId, userText, assistantText) {
             { role: 'system', content: 'You are a title generator. Your only job is to invent a short title for a conversation. Rules: your entire response MUST be a single-line JSON object exactly of the form {"title": "your title here"}. The title must be at most six words and contain no double quotes. No explanation, no reasoning, no preamble, no markdown, no code fences, no extra keys, no trailing text. Output the JSON object and nothing else.' },
             { role: 'user', content: `User: ${userText}\n\nAssistant: ${assistantText}` }
         ];
-        try {
-            title = parseGeneratedTitle(await requestTitleCompletion(apiToken, model.id, titleMessages));
-        } catch (error) {
-            console.warn('Chat title generation request failed:', error);
+        title = await generateTitleWithRetry(apiToken, model.id, titleMessages);
+        if (!title && model.id !== TITLE_FALLBACK_MODEL) {
+            console.warn(`Chat title generation failed for ${model.id}; falling back to ${TITLE_FALLBACK_MODEL}`);
+            title = await generateTitleWithRetry(apiToken, TITLE_FALLBACK_MODEL, titleMessages);
         }
         title = title.replace(/^["'`#\s]+|["'`\s]+$/g, '').split(/\s+/).slice(0, 6).join(' ').slice(0, 100);
         let usedFallback = false;
