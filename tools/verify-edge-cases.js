@@ -989,6 +989,7 @@ async function main() {
         await page.click('button.settings-row');
         await page.click('.settings-tab[data-tab="appearance"]');
         await page.keyboard.press('Tab'); // Data tab
+        await page.keyboard.press('Tab'); // About tab
         await page.keyboard.press('Tab'); // Light theme card
         check(await page.evaluate(() => document.activeElement?.dataset.themeCard === 'light'), 'Theme card is reachable by keyboard');
         const focusStyle = await page.locator('.theme-card[data-theme-card="light"]').evaluate(el => getComputedStyle(el).outlineStyle);

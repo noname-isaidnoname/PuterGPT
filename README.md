@@ -34,6 +34,7 @@ flowchart LR
             Tokens
             Appearance
             Data
+            About
         end
         subgraph AppearancePanel["Appearance — theme cards"]
             Light["☀ Light"]

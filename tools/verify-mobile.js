@@ -50,4 +50,10 @@ run('verify-mobile', { viewport: { width: 420, height: 850 } }, async (page, ctx
     await sleep(400);
     check(true, 'data tab reachable');
     await ctx.shot('mobile-data.png');
+
+    await page.click('.settings-tab[data-tab="about"]');
+    await page.waitFor("document.getElementById('settings-panel-about').classList.contains('active')");
+    await sleep(400);
+    check(true, 'about tab reachable');
+    await ctx.shot('mobile-about.png');
 });

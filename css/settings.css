@@ -410,3 +410,76 @@
     width: 100%;
     box-sizing: border-box;
 }
+
+/* About panel */
+.about-block {
+    margin-bottom: 16px;
+}
+
+.about-block p {
+    margin: 0 0 8px;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    line-height: 1.6;
+}
+
+.about-block a,
+.about-links a {
+    color: var(--accent-color, var(--text-primary));
+    text-decoration: none;
+}
+
+.about-block a:hover,
+.about-links a:hover {
+    text-decoration: underline;
+}
+
+.about-links {
+    list-style: none;
+    margin: 0 0 16px;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.about-links a {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.about-links a:hover {
+    border-color: var(--accent-color, var(--border-color));
+    background: var(--bg-secondary);
+    text-decoration: none;
+}
+
+.about-links .material-icons-outlined {
+    font-size: 22px;
+    color: var(--text-secondary);
+}
+
+.about-links span:last-child {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.about-links strong {
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.about-links small {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    word-break: break-all;
+}

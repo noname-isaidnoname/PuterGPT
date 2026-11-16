@@ -326,6 +326,9 @@
                     <button class="settings-tab" role="tab" aria-selected="false" data-tab="data" onclick="switchSettingsTab('data')">
                         <span class="material-icons-outlined">save</span> Data
                     </button>
+                    <button class="settings-tab" role="tab" aria-selected="false" data-tab="about" onclick="switchSettingsTab('about')">
+                        <span class="material-icons-outlined">info</span> About
+                    </button>
                 </aside>
 
                 <div class="settings-content">
@@ -501,6 +504,37 @@
                                     <div style="padding:10px; color:var(--text-secondary); font-size:0.8rem; font-style:italic;">No tokens added yet. Add your first token above!</div>
                                 </div>
                             </div>
+                        </div>
+                    </section>
+
+                    <!-- About Panel -->
+                    <section class="settings-panel" id="settings-panel-about" role="tabpanel">
+                        <div class="settings-panel-header">
+                            <h4>About PuterGPT</h4>
+                            <p>A free, browser-based AI chat client for Puter.ai models.</p>
+                        </div>
+
+                        <div class="about-block">
+                            <p>PuterGPT lets you chat with a wide range of AI models through the Puter API — no account setup on this site. It is a static HTML/CSS/vanilla-JavaScript app; your chats, settings, and tokens stay in your browser's local storage.</p>
+                            <p>Powered by <a href="https://puter.com" target="_blank" rel="noopener noreferrer">Puter</a>. Responses are AI-generated and can be wrong — double-check important answers.</p>
+                        </div>
+
+                        <span class="settings-field-label">Made by</span>
+                        <div class="about-block">
+                            <p><a href="https://github.com/noname-isaidnoname" target="_blank" rel="noopener noreferrer">noname-isaidnoname</a> on GitHub · <a href="https://websim.com/@noname_isaidnoname" target="_blank" rel="noopener noreferrer">@noname_isaidnoname</a> on websim.com</p>
+                        </div>
+
+                        <span class="settings-field-label">Links</span>
+                        <ul class="about-links">
+                            <li><a href="https://github.com/noname-isaidnoname/PuterGPT" target="_blank" rel="noopener noreferrer"><span class="material-icons-outlined">code</span><span><strong>Source code &amp; issues</strong><small>github.com/noname-isaidnoname/PuterGPT</small></span></a></li>
+                            <li><a href="https://noname-isaidnoname.github.io/PuterGPT/" target="_blank" rel="noopener noreferrer"><span class="material-icons-outlined">public</span><span><strong>GitHub Pages</strong><small>noname-isaidnoname.github.io/PuterGPT</small></span></a></li>
+                            <li><a href="https://websim.com/@noname_isaidnoname/putergpt" target="_blank" rel="noopener noreferrer"><span class="material-icons-outlined">language</span><span><strong>Websim project</strong><small>websim.com/@noname_isaidnoname/putergpt</small></span></a></li>
+                            <li><a href="https://puter.com" target="_blank" rel="noopener noreferrer"><span class="material-icons-outlined">smart_toy</span><span><strong>Puter</strong><small>puter.com — the API behind the models</small></span></a></li>
+                        </ul>
+
+                        <span class="settings-field-label">Contributing</span>
+                        <div class="about-block">
+                            <p>Contributions are welcome on <a href="https://github.com/noname-isaidnoname/PuterGPT" target="_blank" rel="noopener noreferrer">GitHub</a> — see the contributing guide in the repository.</p>
                         </div>
                     </section>
 
