@@ -45,7 +45,7 @@ flowchart LR
     end
 ```
 
-This is a schematic, not a screenshot. For current desktop and mobile screenshots, see [Development and visual checks](#development-and-visual-checks).
+This is a schematic, not a screenshot. See the screenshots below.
 
 | Settings and theme cards | Mobile settings |
 | --- | --- |
@@ -60,7 +60,8 @@ This is a schematic, not a screenshot. For current desktop and mobile screenshot
 - **Organize and search:** Filter chat titles in the sidebar, pin conversations, and search saved chats. New chats can be named automatically using a free model when one is available.
 - **Backups and exports:** Export individual chats as JSON or Markdown, print a transcript, or use Settings → Data to export and merge a full backup. API tokens are excluded from backups unless explicitly selected. Backups and exports may contain prompts, images, and other private conversation data.
 - **Sharing and input:** Share a chat using the mobile share sheet when available, or copy its link. Supported browsers also offer voice input.
-- **Themes and tokens:** Choose a built-in theme or create a custom theme, manage multiple tokens, and opt in to token rotation. Custom themes can contain JavaScript effects; only import themes and backups you trust.
+- **Themes:** Choose a built-in theme, or create a custom theme (generate one with AI, or start from a dark/light preset and tweak it yourself). Edit any custom theme's colors and JavaScript effects — enable the live preview to see changes as you type. Only import themes and backups you trust — custom themes can contain JavaScript effects.
+- **Tokens:** Manage multiple Puter API tokens — add them by hand or via Quick Register — and opt in to token rotation so a failing token rotates to the next one automatically.
 - **Installable shell:** On supported browsers, install the app and reopen its cached interface offline. Generation and other Puter API operations still require a network connection. Updates wait for you to choose Reload.
 - **Keyboard access:** Press `?` or use **Keyboard shortcuts** in the sidebar for the full list. `Ctrl+K` focuses the chat filter, `Ctrl+,` opens settings, and `Ctrl+Shift+E` exports the current chat; use `Cmd` instead of `Ctrl` on macOS.
 
@@ -82,17 +83,8 @@ Puter requests send the selected token and relevant prompts or attachments to Pu
 - Legacy `puter_*` localStorage data is migrated to IndexedDB during startup when the corresponding database tables are empty. Existing database records are not replaced by that migration.
 - The app depends on third-party scripts and the Puter API. If a required library cannot load, a blocking error is shown instead of a partially functioning interface.
 
-## Development and visual checks
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) and [tools/README.md](tools/README.md). The app needs no build or package installation; verification tools are separate:
-
-```bash
-node tools/verify-all.js
-node tools/verify-all.js --changed
-```
-
-For screenshots of the current settings sidebar and theme cards, run `node tools/verify-settings.js --backend playwright`. The harness writes `settings-general.png` and `settings-appearance.png` to the screenshot directory shown in its output (by default `$TMPDIR/putergpt-tools`); `node tools/verify-mobile.js --backend playwright` captures mobile views. Harness screenshots are verification artifacts; they don't belong in commits by default. The exception is `screenshots/`: screenshots stored there and referenced by the documentation are part of the repository and may be committed. To refresh them, copy the harness output there (e.g. with `--screenshot-dir screenshots`) and keep the docs' references in sync.
-
 ## Project
 
 Source and issue tracker: [github.com/noname-isaidnoname/PuterGPT](https://github.com/noname-isaidnoname/PuterGPT).
+
+Contributors: see [CONTRIBUTING.md](CONTRIBUTING.md) for local development and verification tooling. Editors of the app should read [AGENTS.md](AGENTS.md) for the project map and internal conventions.

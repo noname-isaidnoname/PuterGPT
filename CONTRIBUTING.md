@@ -1,28 +1,100 @@
 # Contributing
 
-PuterGPT is a static HTML, CSS, and vanilla JavaScript app. It is served as-is; do not add a build step, framework, or package manifest.
+PuterGPT is a static HTML, CSS, and vanilla JavaScript app — served as-is from the repo root. There is deliberately no build step, framework, bundler, or package manifest. Keep it that way unless a change is impossible to express with plain files.
 
-## Run locally
+This is the friendly version of the contributor guide. [AGENTS.md](AGENTS.md) carries the full project map, the state/security invariants, the failure modes we've hit, and the AI-agent context — dense but authoritative. [tools/README.md](tools/README.md) covers the verification harnesses in detail. When you're unsure where something in this repo is documented, check those before guessing.
+
+## Prerequisites
+
+- A modern browser (Chromium, Firefox, Safari) with IndexedDB support.
+- `python3` for the local static server — or any static file server.
+- Playwright (for screenshots / mobile emulation) and/or Lightpanda (fast, no graphical engine) for the verification harnesses. [tools/README.md](tools/README.md) covers installing them.
+
+## Run it locally
 
 ```bash
+git clone https://github.com/noname-isaidnoname/PuterGPT.git
+cd PuterGPT
 python3 -m http.server 8000
 ```
 
-Open `http://localhost:8000`. Read [AGENTS.md](AGENTS.md) for the project map, state and security invariants, theming rules, and verification gotchas.
+Open `http://localhost:8000`. Read [AGENTS.md](AGENTS.md) for the architecture map, the state invariants, the security rules, and the verification gotchas.
 
-## Verify changes
+A secure context such as HTTPS or localhost is needed for features including service workers and some clipboard and speech APIs.
 
-The browser harnesses and prerequisites are documented in [tools/README.md](tools/README.md). With the required tools already installed:
+## Project layout in one minute
+
+Everything is served from the repo root — there is no `src/` and no `dist/`.
+
+- `index.html` — the skeleton: sidebar, welcome view, composer, **all** modals (settings, settings-confirm, code runner, theme generator, delete-theme, theme editor, preset creation), the toast container, and the default dark `:root` CSS variables.
+- `js/` — plain ES modules loaded by the browser (no imports/exports are used; entry is `js/app.js`).
+- `css/` — one concern per file, linked from `index.html`.
+- `manifest.json`, `sw.js`, `js/pwa.js` — installable app shell.
+- `tools/` — verification harnesses (Node, zero app dependencies). They are not needed to run the app. Don't add them to commits by accident.
+- `screenshots/` — screenshots referenced by docs, can be committed; ad-hoc harness screenshots elsewhere are verification artifacts and don't belong in commits.
+
+For the detailed per-file ownership list see [AGENTS.md](AGENTS.md) ("Project map").
+
+## Verify your changes
+
+With the verification tools installed (see [tools/README.md](tools/README.md) for prerequisites):
 
 ```bash
-node tools/verify-all.js
-node tools/verify-all.js --changed
-node tools/verify-settings.js --backend playwright
-node tools/verify-mobile.js --backend playwright
+node tools/verify-all.js                  # full suite, runs in parallel
+node tools/verify-all.js --changed        # only harnesses affected by uncommitted changes (used by the pre-commit hook)
 ```
 
-The Playwright runs capture screenshots for visual inspection. Generation and state changes should also have an independent scenario in `tools/verify-edge-cases.js`. Ask before installing missing verification tools on someone else's machine.
+Single harnesses:
 
-Install the versioned pre-commit hook with `sh tools/install-hooks.sh`. It checks JavaScript syntax, runs the applicable verification harnesses, and blocks a failing commit. The hook can be bypassed in an emergency with `git commit --no-verify`.
+```bash
+node tools/verify-settings.js --backend playwright   # settings sidebar; needs Playwright for screenshots
+node tools/verify-custom-themes.js                  # theme-card grid (built-ins, custom themes, preset, edit buttons)
+node tools/verify-theme-editor.js                   # the theme editor end-to-end
+node tools/verify-mobile.js --backend playwright    # mobile viewport emulation
+node tools/verify-edge-cases.js                     # failure/abort/XSS paths (Playwright-only, fully offline mock API)
+node tools/verify-edge-cases.js --only 11           # one scenario by 1-based index; substrings work too
+```
 
-When changing cached app files, update the service worker cache version and maintain its app-shell asset list. Do not cache Puter API responses. Keep secrets, user data, and ad-hoc generated screenshots out of commits; screenshots under `screenshots/` that are used by the documentation are fine to commit.
+`node tools/verify-all.js` exits non-zero if anything fails; on success it prints one line per harness and the full output only for failures. `--verbose` prints everything; `--timeout N` bounds each harness (default 180s). Generation paths are mocked offline — nothing here hits the real Puter API except a few explicit scenarios.
+
+New user-visible behavior should come with a matching scenario in `tools/verify-edge-cases.js`.
+
+### Pre-commit hook
+
+`.githooks/pre-commit` runs `node tools/verify-all.js --changed` and blocks a failing commit (whole suite unless the change is docs/meta-only). Install once per clone:
+
+```bash
+sh tools/install-hooks.sh
+```
+
+Bypass in an emergency with `git commit --no-verify`.
+
+### Refreshing documentation screenshots
+
+The settings and theme-card screenshots referenced by `README.md` are generated by the harnesses:
+
+```bash
+node tools/verify-settings.js --backend playwright --screenshot-dir /tmp/shots
+node tools/verify-mobile.js --backend playwright   --screenshot-dir /tmp/shots
+```
+
+To use them in the docs, copy them into `screenshots/` and keep the references in `README.md` in sync. Only `screenshots/` is a valid place to commit screenshots; harness output elsewhere is an artifact and not for commits.
+
+### Cached files and the service worker
+
+If you change anything the service worker caches — `manifest.json`, `sw.js`, `index.html`, any `css/*.css`, any `js/*.js`, icons, CDN assets — bump `CACHE_NAME` in `sw.js` and keep `APP_SHELL` in sync with added or removed assets. Never cache Puter API responses or authenticated requests. The manifest theme color is intentionally static dark.
+
+### What doesn't belong in commits
+
+- Harness screenshots (they go to `$TMPDIR/putergpt-tools` by default).
+- `node_modules/`, `.fallow/`, editor/OS droppings.
+- Anything in `tools/.env`, any `PUTER_TOKEN`, or anything with a real user prompt, token, or chat content.
+- The only allowed screenshots live under `screenshots/` and are referenced by the docs.
+- `screenshots/` itself is the exception: images referenced by `README.md` may be committed there.
+
+## Where the documentation lives
+
+- [README.md](README.md) — what PuterGPT does for users: features, screenshots, privacy, limitations. No internals.
+- [CONTRIBUTING.md](CONTRIBUTING.md) — this file: how to run and verify the app as a contributor.
+- [AGENTS.md](AGENTS.md) — full internal map for AI agents: invariants, gotchas, verification trapdoors, the full theme/custom-theme state machine.
+- [tools/README.md](tools/README.md) — the verification harnesses and their per-script coverage.

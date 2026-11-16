@@ -2,6 +2,16 @@
 
 Hosted at GitHub Pages: `https://noname-isaidnoname.github.io/PuterGPT/`, deliberately no build steps or servers: see below.
 
+## README, CONTRIBUTING, this file
+
+Three documents, three audiences — keep them consistent with their audience:
+
+- **`README.md`** is user-facing info only — what PuterGPT does, how to use it, privacy, limitations, project links. **No internals, no tooling, no implementation rationale, no verification details, no AI-agent context.** If you're tempted to put it there, it belongs in `CONTRIBUTING.md` (humans) or `AGENTS.md` (agents).
+- **`CONTRIBUTING.md`** is the human contributor guide — approachable, step-by-step: run locally, verify, screenshot refresh workflow, what doesn't belong in commits.
+- **`AGENTS.md`** (this file) is for AI agents — dense reference: architecture map, file ownership, invariants, failure modes, verification traps. It intentionally has no friendly intro.
+
+If you change a file's responsibilities here, update all three in the same change so nothing contradicts anything else. If you add user-facing docs that mention internals, move them out.
+
 PuterGPT — a browser-based AI chat client for [Puter.ai](https://puter.ai) models. Static HTML/CSS/vanilla JS. **No build step, no server, no package.json.** The deployed site is served as-is from this directory (GitHub Pages), and the same files run fine off `python3 -m http.server`.
 
 Everything lives in one big `index.html`; there is no bundler, no TypeScript, no lint/test harness. Keep it that way unless the user asks for tooling.
@@ -150,4 +160,4 @@ Short imperative summaries (`redesign: …` is fine). No attribution of tools/mo
 
 ## Updating this file
 
-If you learn something the next agent would rediscover the hard way — a platform quirk, a verification trap, a file that owns an unexpected behavior — write it down here in the same change. Keep it accurate; wrong notes are worse than missing ones.
+If you learn something the next agent would rediscover the hard way — a platform quirk, a verification trap, a file that owns an unexpected behavior — write it down here in the same change. Keep it accurate; wrong notes are worse than missing ones. Don't outsource content to `README.md`: if it's not user-facing info, it doesn't belong there — `CONTRIBUTING.md` and this file are the homes for it.
